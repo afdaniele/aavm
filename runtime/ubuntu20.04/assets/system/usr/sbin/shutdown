@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+# kill systemd to terminate the container
+systemctl poweroff
