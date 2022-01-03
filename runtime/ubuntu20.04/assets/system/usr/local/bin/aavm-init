@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+# do something here
+mkdir /run
+chmod 755 /run
+
+
+touch /boot/.aavm-init.proof
+

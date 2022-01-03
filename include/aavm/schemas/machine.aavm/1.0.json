@@ -1,0 +1,23 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "aavm-machine-schema-1-0",
+    "title": "",
+    "type": "object",
+    "properties": {
+        "version": {
+            "type": "string",
+            "const": "1.0"
+        },
+        "description": {
+            "type": "string"
+        },
+        "configuration": {
+            "type": "object"
+        },
+        "machine": {
+            "type": "string"
+        }
+    },
+    "required": ["version", "description", "configuration", "machine"],
+    "additionalProperties": false
+}
