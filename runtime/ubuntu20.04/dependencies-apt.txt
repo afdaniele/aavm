@@ -1,19 +1,15 @@
 # LIST YOUR APT PACKAGES HERE
 
-# systemd-compatible tools
-# - docker in docker (DIND)
-#docker.io
-#docker-compose
-
-# - SSH
-openssh-server
+# commonly used system libraries
+ca-certificates
+nano
+htop
+iptables
+python3
+python3-pip
+systemd
 
 # - QEMU and multiarch support
 qemu
 binfmt-support
 qemu-user-static
-
-# - mDNS and zeroconf support
-avahi-utils
-avahi-daemon
-libnss-mdns

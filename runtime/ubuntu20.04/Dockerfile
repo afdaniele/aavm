@@ -46,31 +46,6 @@ ENV \
     CPK_PROJECT_LAUNCHERS_PATH="${PROJECT_LAUNCHERS_PATH}" \
     CPK_LAUNCHER="${LAUNCHER}"
 
-# install system libraries
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        ca-certificates \
-        nano \
-        htop \
-        iptables \
-        python3 \
-        python3-pip \
-        systemd \
-    && rm -rf /var/lib/apt/list/*
-
-# remove all unused systemd units
-RUN cd /lib/systemd/system/sysinit.target.wants/; \
-    ls | grep -v systemd-tmpfiles-setup | xargs rm -f $1 \
-    rm -f /lib/systemd/system/multi-user.target.wants/*; \
-    rm -f /etc/systemd/system/*.wants/*; \
-    rm -f /lib/systemd/system/local-fs.target.wants/*; \
-    rm -f /lib/systemd/system/sockets.target.wants/*udev*; \
-    rm -f /lib/systemd/system/sockets.target.wants/*initctl*; \
-    rm -f /lib/systemd/system/basic.target.wants/*; \
-    rm -f /lib/systemd/system/anaconda.target.wants/*; \
-    rm -f /lib/systemd/system/plymouth*; \
-    rm -f /lib/systemd/system/systemd-update-utmp*
-
 # install apt dependencies
 COPY ./dependencies-apt.txt "${PROJECT_PATH}/"
 RUN cpk-apt-install ${PROJECT_PATH}/dependencies-apt.txt
@@ -90,16 +65,6 @@ COPY ./*.cpk ./*.sh ${PROJECT_PATH}/
 # copy the source code
 COPY ./packages "${CPK_PROJECT_PATH}/packages"
 
-# make dbus directory
-#TODO: move to aavm.service
-RUN mkdir -p /var/run/dbus
-
-# copy system stuff
-COPY assets/system/ /
-
-# enable aavm service
-RUN systemctl enable aavm.service
-
 # define default command
 CMD ["bash", "-c", "launcher-${CPK_LAUNCHER}"]
 
@@ -116,6 +81,72 @@ LABEL \
 # <== Do not change the code above this line
 # <==================================================
 
+# make aavm service directory
+ENV AAVM_DIR "/aavm"
+RUN mkdir "${AAVM_DIR}"
+
+# make aavm user
+ENV AAVM_USER="user" \
+    AAVM_USER_UID=1000 \
+    AAVM_USER_GID=1000 \
+    AAVM_USER_SHELL="/bin/bash" \
+    AAVM_USER_PASSWORD="password"
+ENV AAVM_USER_HOME="/home/${AAVM_USER}"
+RUN addgroup --gid ${AAVM_USER_GID} "${AAVM_USER}" && \
+    useradd \
+        --create-home \
+        --home-dir "${AAVM_USER_HOME}" \
+        --comment "AAVM User" \
+        --shell "${AAVM_USER_SHELL}" \
+        --password "papAq5PwY/QQM" \
+        --uid ${AAVM_USER_UID} \
+        --gid ${AAVM_USER_GID} \
+        "${AAVM_USER}"
+
+# remove all unused systemd units
+RUN cd /lib/systemd/system/sysinit.target.wants/; \
+    ls | grep -v systemd-tmpfiles-setup | xargs rm -f $1 \
+    rm -f /lib/systemd/system/multi-user.target.wants/*; \
+    rm -f /etc/systemd/system/*.wants/*; \
+    rm -f /lib/systemd/system/local-fs.target.wants/*; \
+    rm -f /lib/systemd/system/sockets.target.wants/*udev*; \
+    rm -f /lib/systemd/system/sockets.target.wants/*initctl*; \
+    rm -f /lib/systemd/system/basic.target.wants/*; \
+    rm -f /lib/systemd/system/anaconda.target.wants/*; \
+    rm -f /lib/systemd/system/plymouth*; \
+    rm -f /lib/systemd/system/systemd-update-utmp*
+
+# copy system stuff
+COPY assets/system/ /
+
+# enable aavm service
+RUN systemctl enable aavm.service
+
+# copy components
+COPY assets/components "${AAVM_DIR}/components"
+
+# install components
+# - Docker
+RUN aavm-component-install docker
+LABEL aavm.environment.components.docker="1"
+
+# - Docker Compose
+#RUN aavm-component-install docker-compose
+#LABEL aavm.environment.components.docker-compose="1"
+
+# - Docker Rootless
+RUN aavm-component-install docker-rootless
+LABEL aavm.environment.components.docker-rootless="1"
+
+# - SSH Server
+#RUN aavm-component-install openssh-server
+#LABEL aavm.environment.components.openssh-server="1"
+
+# - mDNS and zeroconf support
+#RUN aavm-component-install avahi
+#LABEL aavm.environment.components.avahi="1"
+
+# set the stop signal to use against systemd
 STOPSIGNAL SIGRTMIN+3
 
 # store aavm metadata
@@ -123,21 +154,3 @@ LABEL \
     aavm.runtime="1" \
     aavm.environment.os_family="linux" \
     aavm.environment.arch="${ARCH}"
-
-
-
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        cloud-init \
-    && rm -rf /var/lib/apt/list/*
-
-
-
-RUN apt update \
-    && apt install -y --no-install-recommends \
-        docker.io \
-    && rm -rf /var/lib/apt/list/*
-
-
-RUN systemctl enable cloud-init.service
-RUN systemctl enable docker.service
