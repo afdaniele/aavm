@@ -6,7 +6,7 @@ set -eux
 # get info about user
 uid="$(id -u)"
 user="$(id -un 2>/dev/null || :)"
-export XDG_RUNTIME_DIR="/run/user/$uid"
+export XDG_RUNTIME_DIR="/home/$user/.local/run"
 dockerSocket="unix://${XDG_RUNTIME_DIR}/docker.sock"
 
 

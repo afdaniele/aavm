@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
 
-# create dbus directory
-mkdir -p /var/run/dbus
-
 # keep proof of init
 touch /boot/.aavm-init.proof
-

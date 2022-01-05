@@ -92,7 +92,8 @@ ENV AAVM_USER="user" \
     AAVM_USER_SHELL="/bin/bash" \
     AAVM_USER_PASSWORD="password"
 ENV AAVM_USER_HOME="/home/${AAVM_USER}"
-RUN addgroup --gid ${AAVM_USER_GID} "${AAVM_USER}" && \
+RUN addgroup --system privileged && \
+    addgroup --gid ${AAVM_USER_GID} "${AAVM_USER}" && \
     useradd \
         --create-home \
         --home-dir "${AAVM_USER_HOME}" \
@@ -101,6 +102,7 @@ RUN addgroup --gid ${AAVM_USER_GID} "${AAVM_USER}" && \
         --password "papAq5PwY/QQM" \
         --uid ${AAVM_USER_UID} \
         --gid ${AAVM_USER_GID} \
+        --groups privileged \
         "${AAVM_USER}"
 
 # remove all unused systemd units

@@ -1,6 +1,5 @@
 [Unit]
 Description=This script setups AAVM
-After=docker.service
 
 [Service]
 Type=oneshot

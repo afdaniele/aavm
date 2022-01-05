@@ -1,0 +1,3 @@
+# Allows privileged users to shutdown the system without a password
+
+%privileged ALL = NOPASSWD: /sbin/halt, /sbin/poweroff, /usr/sbin/shutdown

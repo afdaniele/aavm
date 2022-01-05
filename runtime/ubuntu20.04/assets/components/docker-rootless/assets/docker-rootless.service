@@ -2,9 +2,6 @@
 Description=Docker Application Container Engine (Rootless)
 
 [Service]
-ExecStartPre=+mkdir -p /run/user/1000
-ExecStartPre=+chown 1000:1000 /run/user/1000
-
 ExecStart=/usr/local/bin/dockerd-rootless
 
 User=1000

@@ -8,6 +8,7 @@ iptables
 python3
 python3-pip
 systemd
+sudo
 
 # - QEMU and multiarch support
 qemu
