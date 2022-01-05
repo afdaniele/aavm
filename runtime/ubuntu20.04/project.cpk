@@ -1,7 +1,7 @@
 {
-    "description": "AVM Runtime based on Ubuntu 20.04",
+    "description": "AAVM Runtime based on Ubuntu 20.04",
     "maintainer": "Andrea F. Daniele <afdaniele@ttic.edu>",
-    "name": "avm-ubuntu",
+    "name": "aavm-ubuntu",
     "tag": "20.04",
     "organization": "afdaniele",
     "schema": "1.0",

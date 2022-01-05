@@ -2,6 +2,9 @@
 
 set -eu
 
+# constants
+COMPONENTS_DIR="${AAVM_DIR}/components"
+
 # no arguments passed
 if [ "$#" -eq 0 ]; then
     echo >&2 "error: you need to pass a component name to 'aavm-component-install'"
@@ -12,17 +15,20 @@ fi
 COMPONENT=$1
 
 # install component
-INSTALL_SH="${AAVM_DIR}/components/${COMPONENT}/install.sh"
+INSTALL_SH="${COMPONENTS_DIR}/available/${COMPONENT}/install.sh"
 chmod +x "${INSTALL_SH}"
 ${INSTALL_SH}
 
 # setup component
 shift 1
-SETUP_SH="${AAVM_DIR}/components/${COMPONENT}/setup.sh"
+SETUP_SH="${COMPONENTS_DIR}/available/${COMPONENT}/setup.sh"
 chmod +x "${SETUP_SH}"
 ${SETUP_SH} "$@"
 
 # setup component
-TEST_SH="${AAVM_DIR}/components/${COMPONENT}/test.sh"
+TEST_SH="${COMPONENTS_DIR}/available/${COMPONENT}/test.sh"
 chmod +x "${TEST_SH}"
 ${TEST_SH}
+
+# mark as installed
+ln -s "${COMPONENTS_DIR}/available/${COMPONENT}" "${COMPONENTS_DIR}/installed/${COMPONENT}"

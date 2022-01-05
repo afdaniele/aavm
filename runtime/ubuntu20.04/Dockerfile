@@ -83,7 +83,11 @@ LABEL \
 
 # make aavm service directory
 ENV AAVM_DIR "/aavm"
-RUN mkdir "${AAVM_DIR}"
+RUN mkdir \
+    "${AAVM_DIR}" \
+    "${AAVM_DIR}/components" \
+    "${AAVM_DIR}/components/available" \
+    "${AAVM_DIR}/components/installed"
 
 # make aavm user
 ENV AAVM_USER="user" \
@@ -105,6 +109,22 @@ RUN addgroup --system privileged && \
         --groups privileged \
         "${AAVM_USER}"
 
+# give the user access to the cpk environment
+# - for interactive bash sessions
+RUN echo "source ${CPK_INSTALL_DIR}/environment.sh" >> "${AAVM_USER_HOME}/.bashrc"
+# - for non-interactive bash sessions
+ENV BASH_ENV "${CPK_INSTALL_DIR}/environment.sh"
+
+# constants
+RUN echo "\
+export AAVM_DIR=\"${AAVM_DIR}\" \n\
+export AAVM_USER=\"${AAVM_USER}\" \n\
+export AAVM_USER_UID=\"${AAVM_USER_UID}\" \n\
+export AAVM_USER_GID=\"${AAVM_USER_GID}\" \n\
+export AAVM_USER_SHELL=\"${AAVM_USER_SHELL}\" \n\
+export AAVM_USER_HOME=\"${AAVM_USER_HOME}\" \
+" > "${AAVM_DIR}/constants.sh"
+
 # remove all unused systemd units
 RUN cd /lib/systemd/system/sysinit.target.wants/; \
     ls | grep -v systemd-tmpfiles-setup | xargs rm -f $1 \
@@ -125,24 +145,24 @@ COPY assets/system/ /
 RUN systemctl enable aavm.service
 
 # copy components
-COPY assets/components "${AAVM_DIR}/components"
+COPY assets/components "${AAVM_DIR}/components/available"
 
 # install components
 # - Docker
-RUN aavm-component-install docker
-LABEL aavm.environment.components.docker="1"
+#RUN aavm-component-install docker
+#LABEL aavm.environment.components.docker="1"
 
 # - Docker Compose
 #RUN aavm-component-install docker-compose
 #LABEL aavm.environment.components.docker-compose="1"
 
 # - Docker Rootless
-RUN aavm-component-install docker-rootless
-LABEL aavm.environment.components.docker-rootless="1"
+#RUN aavm-component-install docker-rootless
+#LABEL aavm.environment.components.docker-rootless="1"
 
 # - SSH Server
-RUN aavm-component-install openssh-server
-LABEL aavm.environment.components.openssh-server="1"
+#RUN aavm-component-install openssh-server
+#LABEL aavm.environment.components.openssh-server="1"
 
 # - mDNS and zeroconf support
 #RUN aavm-component-install avahi
