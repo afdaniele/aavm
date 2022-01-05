@@ -139,8 +139,8 @@ RUN aavm-component-install docker-rootless
 LABEL aavm.environment.components.docker-rootless="1"
 
 # - SSH Server
-#RUN aavm-component-install openssh-server
-#LABEL aavm.environment.components.openssh-server="1"
+RUN aavm-component-install openssh-server
+LABEL aavm.environment.components.openssh-server="1"
 
 # - mDNS and zeroconf support
 #RUN aavm-component-install avahi
