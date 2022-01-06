@@ -5,7 +5,9 @@
         "name": "aavm-ubuntu",
         "tag": "20.04",
         "organization": "afdaniele",
-        "schema": "1.0",
-        "template": null
+        "arch": [
+            "amd64",
+            "arm64v8"
+        ]
     }
 ]
