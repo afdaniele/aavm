@@ -7,7 +7,7 @@ from typing import Dict
 
 import jsonschema
 
-from cpk.cli import cpklogger
+from aavm.cli import aavmlogger
 from cpk.schemas import get_machine_schema
 from cpk.utils.misc import sanitize_hostname
 
@@ -56,7 +56,7 @@ def load_machines(path: str) -> Dict[str, Machine]:
                     raise ValueError(f"Machine descriptor has a bad format. "
                                      f"Reason:\n\t{str(e)}")
         except (KeyError, ValueError) as e:
-            cpklogger.warning(f"An error occurred while loading the machine '{machine_name}', "
+            aavmlogger.warning(f"An error occurred while loading the machine '{machine_name}', "
                               f"the error reads:\n{str(e)}")
             continue
         # we have loaded a valid machine
@@ -67,16 +67,16 @@ def load_machines(path: str) -> Dict[str, Machine]:
 
 def get_machine(parsed: argparse.Namespace, machines: Dict[str, Machine]) -> Machine:
     if parsed.machine is None:
-        cpklogger.debug("Argument 'parsed.machine' not set. Creating machine from environment.")
+        aavmlogger.debug("Argument 'parsed.machine' not set. Creating machine from environment.")
         return FromEnvMachine()
     # match machine names against given string
     known_machine = machines.get(str(parsed.machine).strip(), None)
     if known_machine:
-        cpklogger.debug(f"Machine '{parsed.machine}' is a known machine. "
+        aavmlogger.debug(f"Machine '{parsed.machine}' is a known machine. "
                         f"Endpoint: {known_machine.base_url}")
         return known_machine
     # assume it is a hostname or IP address
-    cpklogger.debug(f"Machine '{parsed.machine}' is not a known machine. "
+    aavmlogger.debug(f"Machine '{parsed.machine}' is not a known machine. "
                     f"Assuming a resolvable hostname or an IP address was passed.")
     return TCPMachine(parsed.machine, sanitize_hostname(parsed.machine))
 

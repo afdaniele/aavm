@@ -1,12 +1,14 @@
 import argparse
 from typing import Optional
 
-from cpk.cli.commands.info import CLIInfoCommand
+from aavm.cli.commands.info import CLIInfoCommand
 
 from cpk import CPKProject
 
-from .. import AbstractCLICommand, cpklogger
-from ...types import Machine, Arguments
+from .. import AbstractCLICommand, aavmlogger
+from ...types import Arguments
+
+from cpk.types import Machine
 
 
 class CLIRemoveCommand(AbstractCLICommand):
@@ -29,9 +31,9 @@ class CLIRemoveCommand(AbstractCLICommand):
 
         # pick right value of `arch` given endpoint
         if parsed.arch is None:
-            cpklogger.info("Parameter `arch` not given, will resolve it from the endpoint.")
+            aavmlogger.info("Parameter `arch` not given, will resolve it from the endpoint.")
             parsed.arch = machine.get_architecture()
-            cpklogger.info(f"Parameter `arch` automatically set to `{parsed.arch}`.")
+            aavmlogger.info(f"Parameter `arch` automatically set to `{parsed.arch}`.")
 
         # create docker client
         docker = machine.get_client()

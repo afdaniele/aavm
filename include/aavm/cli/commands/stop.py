@@ -14,7 +14,7 @@ from cpk.utils.misc import configure_binfmt
 from .endpoint import CLIEndpointInfoCommand
 from .info import CLIInfoCommand
 from .. import AbstractCLICommand
-from ..logger import cpklogger
+from ..logger import aavmlogger
 from ...exceptions import NotACPKProjectException
 from ...types import CPKFileMappingTrigger, Machine, Arguments
 from ...utils.cli import check_git_status
@@ -182,9 +182,9 @@ class CLIStopCommand(AbstractCLICommand):
         # pick right value of `arch` given endpoint
         machine_arch = machine.get_architecture()
         if parsed.arch is None:
-            cpklogger.info("Parameter `arch` not given, will resolve it from the endpoint.")
+            aavmlogger.info("Parameter `arch` not given, will resolve it from the endpoint.")
             parsed.arch = machine_arch
-            cpklogger.info(f"Parameter `arch` automatically set to `{parsed.arch}`.")
+            aavmlogger.info(f"Parameter `arch` automatically set to `{parsed.arch}`.")
 
         # create docker client
         docker = machine.get_client()
@@ -196,7 +196,7 @@ class CLIStopCommand(AbstractCLICommand):
         # subcommand "attach"
         # TODO: this will not work with Machine created from env, the host will be None
         # if parsed.subcommand == "attach":
-        #     cpklogger.info(f"Attempting to attach to container '{parsed.name}'...")
+        #     aavmlogger.info(f"Attempting to attach to container '{parsed.name}'...")
         #     # run
         #     _run_cmd(
         #         [
@@ -220,10 +220,10 @@ class CLIStopCommand(AbstractCLICommand):
         module_configuration_args = []
 
         # print info about multiarch
-        cpklogger.info("Running an image for {} on {}.".format(parsed.arch, machine_arch))
+        aavmlogger.info("Running an image for {} on {}.".format(parsed.arch, machine_arch))
         # - register bin_fmt in the target machine (if needed)
         if not parsed.no_multiarch:
-            configure_binfmt(machine_arch, parsed.arch, docker, cpklogger)
+            configure_binfmt(machine_arch, parsed.arch, docker, aavmlogger)
 
         # x-docker configuration
         if parsed.use_x_docker:
@@ -260,13 +260,13 @@ class CLIStopCommand(AbstractCLICommand):
             for project_path in paths_to_mount:
                 # make sure that the project exists
                 if not os.path.isdir(project_path):
-                    cpklogger.error('The path "{:s}" is not a CPK project'.format(project_path))
+                    aavmlogger.error('The path "{:s}" is not a CPK project'.format(project_path))
                     return False
                 # get project info
                 try:
                     proj = CPKProject(project_path)
                 except NotACPKProjectException:
-                    cpklogger.error(f"The path '{project_path}' does not contain a CPK project.")
+                    aavmlogger.error(f"The path '{project_path}' does not contain a CPK project.")
                     return False
                 projects_to_mount.append(proj)
 
@@ -275,26 +275,26 @@ class CLIStopCommand(AbstractCLICommand):
         if sync_remote:
             # does not make sense to rsync without mounting
             if not mount_source:
-                cpklogger.error("The options -s/--sync, -sm/--sync-mirror can only be used "
+                aavmlogger.error("The options -s/--sync, -sm/--sync-mirror can only be used "
                                 "together with -M/--mount")
                 return False
             # only allowed when mounting remotely
             if machine.is_local:
-                cpklogger.error("The options -s/--sync, -sm/--sync-mirror can only be used "
+                aavmlogger.error("The options -s/--sync, -sm/--sync-mirror can only be used "
                                 "together with -H/--machine")
                 return False
             # only allowed with SSH machines
             if not isinstance(machine, SSHMachine):
-                cpklogger.error("The options -s/--sync, -sm/--sync-mirror can only be used "
+                aavmlogger.error("The options -s/--sync, -sm/--sync-mirror can only be used "
                                 "with SSH-based machines")
                 return False
             # make sure rsync is installed
             if shutil.which("rsync") is None:
-                cpklogger.error("The options -s/--sync, -sm/--sync-mirror requires the 'rsync' "
+                aavmlogger.error("The options -s/--sync, -sm/--sync-mirror requires the 'rsync' "
                                 "tool. Please, install it and retry.")
                 return False
             # ---
-            cpklogger.info(f"Syncing code...")
+            aavmlogger.info(f"Syncing code...")
             remote_uri = f"{machine.user}@{machine.host}:{RSYNC_DESTINATION_PATH.rstrip('/')}"
             # rsync options
             rsync_options = "" if not parsed.sync_mirror else "--delete"
@@ -303,7 +303,7 @@ class CLIStopCommand(AbstractCLICommand):
                 remote_path = f"{remote_uri}/{proj.name}".rstrip('/') + '/'
                 cmd = f"rsync --archive {rsync_options} {proj.path}/ {remote_path}"
                 _run_cmd(cmd, shell=True)
-            cpklogger.info(f"Code synced!")
+            aavmlogger.info(f"Code synced!")
 
         # mount source code (if requested)
         if mount_source:
@@ -330,9 +330,9 @@ class CLIStopCommand(AbstractCLICommand):
             except ImageNotFound:
                 pass
             if present and not parsed.force_pull:
-                cpklogger.info("Found an image with the same name. Use --force-pull to pull again")
+                aavmlogger.info("Found an image with the same name. Use --force-pull to pull again")
             else:
-                cpklogger.info('Pulling image "%s"...' % image)
+                aavmlogger.info('Pulling image "%s"...' % image)
                 machine.pull_image(image)
 
         # cmd option
@@ -384,23 +384,23 @@ class CLIStopCommand(AbstractCLICommand):
             return_exitcode=True
         )
         if parsed.detach:
-            cpklogger.info("Your container is running in detached mode!")
+            aavmlogger.info("Your container is running in detached mode!")
         else:
-            cpklogger.debug(f"Command exited with exit code [{exitcode}].")
+            aavmlogger.debug(f"Command exited with exit code [{exitcode}].")
 
 
 def _run_cmd(cmd, get_output=False, print_output=False, suppress_errors=False, shell=False,
              return_exitcode=False):
     if shell and isinstance(cmd, (list, tuple)):
         cmd = " ".join([str(s) for s in cmd])
-    cpklogger.debug("$ %s" % cmd)
+    aavmlogger.debug("$ %s" % cmd)
     if get_output:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=shell)
         proc.wait()
         if proc.returncode != 0:
             if not suppress_errors:
                 msg = "The command {} returned exit code {}".format(cmd, proc.returncode)
-                cpklogger.error(msg)
+                aavmlogger.error(msg)
                 raise RuntimeError(msg)
         out = proc.stdout.read().decode("utf-8").rstrip()
         if print_output:

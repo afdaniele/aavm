@@ -4,7 +4,7 @@ import os
 from abc import abstractmethod, ABC
 from typing import Optional, Type
 
-from cpk.cli.logger import aavmlogger
+from aavm.cli.logger import aavmlogger
 from cpk.constants import CANONICAL_ARCH
 from cpk.types import Machine, Arguments
 

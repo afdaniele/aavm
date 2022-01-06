@@ -5,8 +5,10 @@ import termcolor as tc
 
 from cpk import CPKProject
 from .. import AbstractCLICommand
-from ..logger import cpklogger
-from ...types import Machine, Arguments
+from ..logger import aavmlogger
+from ...types import Arguments
+
+from cpk.types import Machine
 
 PROJECT_INFO = """
 {project}
@@ -36,7 +38,7 @@ class CLIInfoCommand(AbstractCLICommand):
 
     @staticmethod
     def execute(machine: Optional[Machine], parsed: argparse.Namespace) -> bool:
-        cpklogger.info("Project workspace: {}".format(parsed.workdir))
+        aavmlogger.info("Project workspace: {}".format(parsed.workdir))
 
         # get the project
         project = CPKProject(parsed.workdir)
@@ -60,7 +62,7 @@ class CLIInfoCommand(AbstractCLICommand):
             "space": tc.colored("  ", "grey", "on_white"),
             "end": tc.colored("________", "grey", "on_white"),
         }
-        cpklogger.print(PROJECT_INFO.format(**info))
+        aavmlogger.print(PROJECT_INFO.format(**info))
 
         # ---
         return True

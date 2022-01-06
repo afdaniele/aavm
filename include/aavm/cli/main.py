@@ -3,37 +3,37 @@ import logging
 import os
 import sys
 
-import cpk
-from cpk import cpkconfig
-from cpk.cli.commands.create import CLICreateCommand
-from cpk.exceptions import CPKException
+import aavm
+from aavm import aavmconfig
+from aavm.exceptions import AAVMException
 
-from cpk.cli.logger import cpklogger
-from cpk.cli.commands.info import CLIInfoCommand
-from cpk.cli.commands.build import CLIBuildCommand
-from cpk.cli.commands.run import CLIRunCommand
-from cpk.cli.commands.clean import CLICleanCommand
-from cpk.cli.commands.push import CLIPushCommand
-from cpk.cli.commands.decorate import CLIDecorateCommand
-from cpk.cli.commands.machine import CLIMachineCommand
-from cpk.cli.commands.endpoint import CLIEndpointCommand
-from cpk.utils.machine import get_machine
+from aavm.cli.logger import aavmlogger
+from aavm.cli.commands.create import CLICreateCommand
+from aavm.cli.commands.info import CLIInfoCommand
+# from aavm.cli.commands.build import CLIBuildCommand
+# from aavm.cli.commands.run import CLIRunCommand
+# from aavm.cli.commands.clean import CLICleanCommand
+# from aavm.cli.commands.push import CLIPushCommand
+# from aavm.cli.commands.decorate import CLIDecorateCommand
+# from aavm.cli.commands.machine import CLIMachineCommand
+from aavm.cli.commands.runtime import CLIRuntimeCommand
+from aavm.utils.machine import get_machine
 
 _supported_commands = {
     'create': CLICreateCommand,
     'info': CLIInfoCommand,
-    'build': CLIBuildCommand,
-    'run': CLIRunCommand,
-    'clean': CLICleanCommand,
-    'push': CLIPushCommand,
-    'decorate': CLIDecorateCommand,
-    'machine': CLIMachineCommand,
-    'endpoint': CLIEndpointCommand,
+    # 'build': CLIBuildCommand,
+    # 'run': CLIRunCommand,
+    # 'clean': CLICleanCommand,
+    # 'push': CLIPushCommand,
+    # 'decorate': CLIDecorateCommand,
+    # 'machine': CLIMachineCommand,
+    'runtime': CLIRuntimeCommand,
 }
 
 
 def run():
-    cpklogger.info(f"CPK - Code Packaging toolKit - v{cpk.__version__}")
+    aavmlogger.info(f"AAVM - Almost A Virtual Machine - v{aavm.__version__}")
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         'command',
@@ -51,23 +51,21 @@ def run():
     # let the command parse its arguments
     cmd_parser = command.get_parser(remaining)
     parsed = cmd_parser.parse_args(remaining)
-    # sanitize workdir
-    parsed.workdir = os.path.abspath(parsed.workdir)
     # enable debug
     if parsed.debug:
-        cpklogger.setLevel(logging.DEBUG)
+        aavmlogger.setLevel(logging.DEBUG)
     # get machine
-    machine = get_machine(parsed, cpkconfig.machines)
+    machine = get_machine(parsed, aavmconfig.machines)
     # avoid commands using `parsed.machine`
     parsed.machine = None
     # execute command
     try:
         with machine:
             command.execute(machine, parsed)
-    except CPKException as e:
-        cpklogger.error(str(e))
+    except AAVMException as e:
+        aavmlogger.error(str(e))
     except KeyboardInterrupt:
-        cpklogger.info(f"Operation aborted by the user")
+        aavmlogger.info(f"Operation aborted by the user")
 
 
 if __name__ == '__main__':

@@ -6,7 +6,7 @@ import sys
 p = os.path.abspath(os.path.dirname(sys.argv[0]))
 sys.path.insert(0, os.path.join(p, '..', 'include'))
 
-from cpk.cli.main import run
+from aavm.cli.main import run
 
 if __name__ == '__main__':
     run()
