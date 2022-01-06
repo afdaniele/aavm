@@ -6,7 +6,7 @@ import docker
 import yaml
 from docker.errors import ContainerError, ImageNotFound, APIError
 
-from cpk.constants import CANONICAL_ARCH, CONTAINER_LABEL_DOMAIN, BUILD_COMPATIBILITY_MAP
+from aavm.constants import CANONICAL_ARCH, CONTAINER_LABEL_DOMAIN, BUILD_COMPATIBILITY_MAP
 
 
 def run_cmd(cmd):
@@ -33,7 +33,7 @@ def canonical_arch(arch):
     return CANONICAL_ARCH[arch]
 
 
-def cpk_label(key, value=None):
+def aavm_label(key, value=None):
     label = f"{CONTAINER_LABEL_DOMAIN}.{key.lstrip('.')}"
     if value is not None:
         label = f"{label}={value}"

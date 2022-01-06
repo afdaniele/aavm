@@ -2,15 +2,21 @@ import argparse
 from typing import Optional, Dict, Type
 
 from aavm.cli import AbstractCLICommand
-from aavm.cli.commands.runtime.info import CLIRuntimeInfoCommand
+from aavm.cli.commands.runtime.inspect import CLIRuntimeInspectCommand
 from aavm.cli.commands.runtime.fetch import CLIRuntimeFetchCommand
+from aavm.cli.commands.runtime.pull import CLIRuntimePullCommand
+from aavm.cli.commands.runtime.remove import CLIRuntimeRemoveCommand
+from aavm.cli.commands.runtime.list import CLIRuntimeListCommand
 from aavm.types import Arguments
 
 from cpk.types import Machine
 
 _supported_subcommands: Dict[str, Type[AbstractCLICommand]] = {
-    "info": CLIRuntimeInfoCommand,
     "fetch": CLIRuntimeFetchCommand,
+    "inspect": CLIRuntimeInspectCommand,
+    "pull": CLIRuntimePullCommand,
+    "rm": CLIRuntimeRemoveCommand,
+    "ls": CLIRuntimeListCommand,
 }
 
 

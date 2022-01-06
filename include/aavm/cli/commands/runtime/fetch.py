@@ -1,14 +1,12 @@
 import argparse
 from typing import Optional
 
-import docker
-import requests
 from termcolor import colored
 from terminaltables import SingleTable as Table
 
 from aavm.cli import AbstractCLICommand, aavmlogger
-from aavm.constants import AAVM_RUNTIMES_INDEX_URL
 from aavm.types import Arguments
+from aavm.utils.runtime import fetch_remote_runtimes
 from cpk.types import Machine
 
 
@@ -19,39 +17,42 @@ class CLIRuntimeFetchCommand(AbstractCLICommand):
     def parser(parent: Optional[argparse.ArgumentParser] = None,
                args: Optional[Arguments] = None) -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(parents=[parent], add_help=False)
+        parser.add_argument(
+            "--all",
+            action="store_true",
+            default=False,
+            help="Show runtimes of any architecture",
+        )
         # ---
         return parser
 
     @staticmethod
     def execute(machine: Machine, parsed: argparse.Namespace) -> bool:
         # get list of runtimes available
-        index_url = AAVM_RUNTIMES_INDEX_URL
         aavmlogger.info("Fetching list of available runtimes...")
-        aavmlogger.debug(f"GET: {index_url}")
-        runtimes = requests.get(index_url).json()
+        runtimes = fetch_remote_runtimes(check_downloaded=True, machine=machine)
+        # filter by arch
+        arch = machine.get_architecture()
+        if not parsed.all:
+            runtimes = [r for r in runtimes if r.arch == arch]
         # show list of runtimes available
         data = [
-            ["#", "ID", "Description", "Maintainer", "Arch", "Downloaded"]
+            ["#", "Name", "Description", "Maintainer", "Arch", "Downloaded"] if parsed.all else
+            ["#", "Name", "Description", "Maintainer", "Downloaded"]
         ]
-        # TODO: move this to a utility function that returns List[AAVMRuntime] w/ the option to fill in 'downloaded' field
         for i, runtime in enumerate(runtimes):
-            registry = runtime.get('registry', '')
-            organization = runtime['organization']
-            name = runtime['name']
-            tag = runtime['tag']
-            arch = machine.get_architecture()
-            # compile ID (docker image name)
-            id = f"{registry}/{organization}/{name}:{tag}".lstrip("/")
-            # check whether it is downloaded already
-            try:
-                machine.get_client().images.get(f"{id}-{arch}")
-                downloaded = colored('Yes', 'green')
-            except docker.errors.ImageNotFound:
-                downloaded = colored('No', 'red')
+            row = [str(i), runtime.image, runtime.description, runtime.maintainer]
+            # architecture
+            if parsed.all:
+                row.append(runtime.arch)
+            # whether it is downloaded already
+            downloaded = colored('Yes', 'green') if runtime.downloaded else colored('No', 'red')
+            row.append(downloaded)
             # add row to table
-            data += [[str(i), id, runtime['description'], runtime['maintainer'], arch, downloaded]]
+            data += [row]
         table = Table(data)
         table.title = " Available Runtimes "
+        print()
         print(table.table)
         # ---
         return True

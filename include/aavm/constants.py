@@ -4,6 +4,8 @@ from pathlib import Path
 
 DEBUG = False
 
+CONTAINER_LABEL_DOMAIN = "aavm"
+
 AAVM_RUNTIMES_INDEX_VERSION = "1.0"
 AAVM_RUNTIMES_INDEX_URL = f"https://raw.githubusercontent.com/afdaniele/aavm/main/runtime/index/" \
                           f"{AAVM_RUNTIMES_INDEX_VERSION}.json"
