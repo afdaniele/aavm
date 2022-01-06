@@ -175,4 +175,6 @@ STOPSIGNAL SIGRTMIN+3
 LABEL \
     aavm.runtime="1" \
     aavm.environment.os_family="linux" \
-    aavm.environment.arch="${ARCH}"
+    aavm.environment.arch="${ARCH}" \
+    aavm.environment.description="${DESCRIPTION}" \
+    aavm.environment.maintainer="${MAINTAINER}"
