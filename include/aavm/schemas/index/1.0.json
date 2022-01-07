@@ -43,6 +43,11 @@
                     "enum": ["amd64", "arm32v7", "arm64v8"]
                 }
             },
+            "configuration": {
+                "type": "object",
+                "description": "Object that will be unpacked as kwargs in docker.containers.create()",
+                "additionalProperties": true
+            },
             "metadata": {
                 "type": "object",
                 "description": "Runtime-specific metadata"
@@ -54,7 +59,8 @@
             "name",
             "tag",
             "organization",
-            "arch"
+            "arch",
+            "configuration"
         ],
         "additionalProperties": false
     }

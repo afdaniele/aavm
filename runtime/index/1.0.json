@@ -8,6 +8,20 @@
         "arch": [
             "amd64",
             "arm64v8"
-        ]
+        ],
+        "configuration": {
+            "tmpfs": {
+                "/tmp": "",
+                "/run": "",
+                "/run/lock": ""
+            },
+            "volumes": {
+                "/sys/fs/cgroup": {
+                    "bind": "/sys/fs/cgroup",
+                    "mode": "ro"
+                }
+            },
+            "privileged": true
+        }
     }
 ]
