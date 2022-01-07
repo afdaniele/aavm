@@ -1,63 +1,25 @@
-import argparse
 import glob
-import json
 import os
 from pathlib import Path
-from typing import Dict
-
-import jsonschema
+from typing import Dict, Optional
 
 from aavm.cli import aavmlogger
-from cpk.schemas import get_machine_schema
-from cpk.utils.misc import sanitize_hostname
-
-from cpk.machine import Machine, FromEnvMachine, TCPMachine, SSHMachine, UnixSocketMachine
-
-_supported_machines = {
-    "ssh": SSHMachine,
-    "tcp": TCPMachine,
-    "socket": UnixSocketMachine
-}
+from aavm.exceptions import AAVMException
+from aavm.types import AAVMMachine, AAVMContainer
+from aavm.utils.misc import aavm_label
 
 
-def load_machines(path: str) -> Dict[str, Machine]:
+def load_machines(path: str) -> Dict[str, AAVMMachine]:
     machines = {}
     # iterate over the machines on disk
-    for machine_cfg_fpath in glob.glob(os.path.join(path, '*/config.json')):
+    for machine_cfg_fpath in glob.glob(os.path.join(path, '*/machine.json')):
         machine_dir = Path(machine_cfg_fpath).parent
         machine_name = machine_dir.stem
         try:
-            with open(machine_cfg_fpath, 'rt') as fin:
-                try:
-                    machine_cfg = json.load(fin)
-                except json.decoder.JSONDecodeError as e:
-                    raise ValueError(f"Machine descriptor file is not a valid JSON file. "
-                                     f"Reason:\n\t{str(e)}")
-                # make sure the key 'version' is present
-                if "version" not in machine_cfg:
-                    raise KeyError("Missing field 'version'.")
-                # try reading the schema for this version
-                try:
-                    schema = get_machine_schema(machine_cfg["version"])
-                except FileNotFoundError:
-                    raise KeyError(f"Machine descriptor version '{machine_cfg['version']}' "
-                                   f"not supported.")
-                # validate config file
-                try:
-                    jsonschema.validate(machine_cfg, schema=schema)
-                except jsonschema.exceptions.ValidationError as e:
-                    raise ValueError(f"Machine descriptor has a bad format. "
-                                     f"Reason:\n\t{str(e.message)}")
-                # machine is valid, create object
-                machine_cls = _supported_machines[machine_cfg["type"]]
-                try:
-                    machine = machine_cls(name=machine_name, **machine_cfg["configuration"])
-                except TypeError as e:
-                    raise ValueError(f"Machine descriptor has a bad format. "
-                                     f"Reason:\n\t{str(e)}")
+            machine = AAVMMachine.from_disk(str(machine_dir))
         except (KeyError, ValueError) as e:
             aavmlogger.warning(f"An error occurred while loading the machine '{machine_name}', "
-                              f"the error reads:\n{str(e)}")
+                               f"the error reads:\n{str(e)}")
             continue
         # we have loaded a valid machine
         machines[machine_name] = machine
@@ -65,19 +27,21 @@ def load_machines(path: str) -> Dict[str, Machine]:
     return machines
 
 
-def get_machine(parsed: argparse.Namespace, machines: Dict[str, Machine]) -> Machine:
-    if parsed.machine is None:
-        aavmlogger.debug("Argument 'parsed.machine' not set. Creating machine from environment.")
-        return FromEnvMachine()
-    # match machine names against given string
-    known_machine = machines.get(str(parsed.machine).strip(), None)
-    if known_machine:
-        aavmlogger.debug(f"Machine '{parsed.machine}' is a known machine. "
-                        f"Endpoint: {known_machine.base_url}")
-        return known_machine
-    # assume it is a hostname or IP address
-    aavmlogger.debug(f"Machine '{parsed.machine}' is not a known machine. "
-                    f"Assuming a resolvable hostname or an IP address was passed.")
-    return TCPMachine(parsed.machine, sanitize_hostname(parsed.machine))
-
-
+def get_container(machine: AAVMMachine) -> Optional[AAVMContainer]:
+    client = machine.machine.get_client()
+    containers = client.containers.list(
+        filters={
+            "label": aavm_label("machine.name", machine.name),
+        }
+    )
+    # make sure at most one container serves a single machine
+    if len(containers) > 1:
+        containers_list = "\t- " + "\n\t- ".join([str(c.id) for c in containers])
+        raise AAVMException(f"{len(containers)} containers found for the machine {machine.name}. "
+                            f"This should not have happened. Only one container can exist per "
+                            f"machine. The clashing containers have the following IDs, manually "
+                            f"remove them (optionally leave only one) and then retry.\n\n"
+                            f"Containers:\n"
+                            f"{containers_list}\n")
+    # return container or nothing
+    return containers[0] if containers else None

@@ -1,12 +1,12 @@
 import argparse
 from typing import Optional
 
-from termcolor import colored
 from terminaltables import SingleTable as Table
 
 from aavm.cli import AbstractCLICommand, aavmlogger
 from aavm.types import Arguments
 from aavm.utils.runtime import fetch_remote_runtimes, fetch_machine_runtimes
+from aavm.utils.tables import table_runtime, table_image
 from cpk.types import Machine
 
 
@@ -49,13 +49,9 @@ class CLIRuntimeInspectCommand(AbstractCLICommand):
         # choose one match
         runtime = machine_match if machine_match else index_match
         # show runtime info
-        data = [
-            ["Image", runtime.image],
-            ["Description", runtime.description],
-            ["Maintainer", runtime.maintainer],
-            ["Downloaded", colored('Yes', 'green') if machine_match else colored('No', 'red')],
-            ["Official", colored('Yes', 'green') if index_match else colored('No', 'red')],
-        ]
+        downloaded = machine_match is not None
+        official = machine_match is not None
+        data = table_runtime(runtime, downloaded=downloaded, official=official)
         table = Table(data)
         table.inner_heading_row_border = False
         table.justify_columns[0] = 'right'
@@ -63,14 +59,7 @@ class CLIRuntimeInspectCommand(AbstractCLICommand):
         print()
         print(table.table)
         # show image info
-        data = [
-            ["Image", runtime.image],
-            ["Registry", str(runtime.registry)],
-            ["Organization", runtime.organization],
-            ["Repository", runtime.name],
-            ["Tag", runtime.tag],
-            ["Arch", runtime.arch]
-        ]
+        data = table_image(runtime)
         table = Table(data)
         table.inner_heading_row_border = False
         table.justify_columns[0] = 'right'

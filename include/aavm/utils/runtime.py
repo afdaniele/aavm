@@ -30,6 +30,7 @@ def fetch_remote_runtimes(check_downloaded: bool = False, machine: Optional[Mach
                 description=runtime["description"],
                 maintainer=runtime["maintainer"],
                 arch=arch,
+                configuration=runtime.get("configuration", {}),
                 registry=runtime.get("registry", None),
                 metadata=runtime.get("metadata", {})
             )
@@ -77,6 +78,7 @@ def fetch_machine_runtimes(machine: Machine) -> List[AAVMRuntime]:
             description=runtime.labels.get(aavm_label("environment.description")),
             maintainer=runtime.labels.get(aavm_label("environment.maintainer")),
             arch=runtime.labels.get(aavm_label("environment.arch")),
+            configuration={},
             registry=registry,
             metadata=runtime.labels.get(aavm_label("environment.metadata"), {})
         )

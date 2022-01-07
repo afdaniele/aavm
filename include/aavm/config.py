@@ -1,13 +1,13 @@
 import os
 
-from cpk.constants import CPK_CONFIG_DIR
-from cpk.types import CPKConfiguration
-from cpk.utils.machine import load_machines
+from aavm.constants import AAVM_CONFIG_DIR
+from aavm.types import AAVMConfiguration
+from aavm.utils.machine import load_machines
 
 
-aavmconfig: CPKConfiguration = CPKConfiguration(
-    path=CPK_CONFIG_DIR,
-    machines=load_machines(os.path.join(CPK_CONFIG_DIR, "machines"))
+aavmconfig: AAVMConfiguration = AAVMConfiguration(
+    path=AAVM_CONFIG_DIR,
+    machines=load_machines(os.path.join(AAVM_CONFIG_DIR, "machines"))
 )
 
 __all__ = [

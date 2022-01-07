@@ -10,6 +10,10 @@ AAVM_RUNTIMES_INDEX_VERSION = "1.0"
 AAVM_RUNTIMES_INDEX_URL = f"https://raw.githubusercontent.com/afdaniele/aavm/main/runtime/index/" \
                           f"{AAVM_RUNTIMES_INDEX_VERSION}.json"
 
+MACHINE_SCHEMA_DEFAULT_VERSION = "1.0"
+MACHINE_DEFAULT_VERSION = "1.0"
+
+
 CANONICAL_ARCH = {
     "arm": "arm32v7",
     "arm32v7": "arm32v7",

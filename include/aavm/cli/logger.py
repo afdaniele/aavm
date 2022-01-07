@@ -9,7 +9,7 @@ from aavm.constants import DEBUG
 
 # create logger
 logging.basicConfig()
-aavmlogger = getLogger('aavm')
+aavmlogger = getLogger('vm')
 aavmlogger.setLevel(logging.INFO)
 
 
@@ -49,7 +49,7 @@ def add_coloring_to_emit_ansi(fn, indent: int = 0):
         def color_line(enum_line):
             i, line = enum_line
             tab = " " * (indent - 2) + ": " if i > 0 else ""
-            return "%s%s%s%s" % (tab, color, line, "\x1b[0m")
+            return "%s%s%s%s" % ("", color, line, "\x1b[0m")
 
         lines = list(map(color_line, enumerate(lines)))
         args[1].msg = "\n".join(lines)
@@ -59,10 +59,10 @@ def add_coloring_to_emit_ansi(fn, indent: int = 0):
 
 
 format_indent = 15
-setup_logging_format("%(name)3s|%(levelname)8s : %(message)s")
+setup_logging_format("%(name)2s|%(levelname)8s : %(message)s")
 if DEBUG:
     format_indent = 44
-    setup_logging_format("%(name)3s|%(filename)15s:%(lineno)-4s - %(funcName)-15s| %(message)s")
+    setup_logging_format("%(name)2s|%(filename)15s:%(lineno)-4s - %(funcName)-15s| %(message)s")
 
 if platform.system() != "Windows":
     emit2 = add_coloring_to_emit_ansi(StreamHandler.emit, format_indent)

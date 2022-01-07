@@ -1,45 +1,39 @@
 import argparse
-import copy
-import json
+import functools
 import os
 import re
-from distutils.dir_util import copy_tree
-from typing import Optional
+from typing import Optional, Union, List
 
-from aavm.cli.commands.info import CLIInfoCommand
+from cpk.machine import FromEnvMachine
+from cpk.types import Machine
 from .. import AbstractCLICommand
 from ..logger import aavmlogger
-from ...types import Arguments
+from ... import aavmconfig
+from ...constants import MACHINE_SCHEMA_DEFAULT_VERSION, MACHINE_DEFAULT_VERSION
+from ...types import Arguments, AAVMMachine, AAVMRuntime
+from ...utils.runtime import fetch_machine_runtimes
 
-from cpk.types import Machine
-
-
-
-skel_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "skeleton"))
-surgery = {
+fields = {
     "name": {
-        "title": "Project Name",
-        "targets": ["project.cpk"],
+        "title": "Name",
+        "description": "A unique name for your machine",
         "pattern": r"^[a-zA-Z0-9-_]+$",
-        "pattern_human": "an alphanumeric string [a-zA-Z0-9-_]"
+        "pattern_human": "an alphanumeric string [a-zA-Z0-9-_]",
+        "validator": None
     },
     "description": {
-        "title": "Project Description",
-        "targets": ["project.cpk"],
+        "title": "Description",
+        "description": "A more user-friendly description for your machine",
         "pattern": r"^.+$",
-        "pattern_human": "a non-empty free text"
+        "pattern_human": "a non-empty free text",
+        "validator": None
     },
-    "organization": {
-        "title": "Owner Username",
-        "targets": ["project.cpk"],
-        "pattern": r"^[a-zA-Z0-9-_]+$",
-        "pattern_human": "an alphanumeric string [a-zA-Z0-9-_]"
-    },
-    "maintainer": {
-        "title": "Owner Full Name",
-        "targets": ["project.cpk"],
+    "runtime": {
+        "title": "Runtime",
+        "description": "The AAVM runtime to use as base for your machine",
         "pattern": r"^.+$",
-        "pattern_human": "a non-empty string, suggested format is 'First Last <EMail Address>'"
+        "pattern_human": "a valid Docker image name",
+        "validator": None
     },
 }
 
@@ -56,62 +50,79 @@ class CLICreateCommand(AbstractCLICommand):
 
     @staticmethod
     def execute(machine: Optional[Machine], parsed: argparse.Namespace) -> bool:
-        parsed.workdir = os.path.abspath(parsed.path)
-
-        # make sure the path does not exist or it is empty
-        if os.path.exists(parsed.workdir) and any(os.scandir(parsed.workdir)):
-            aavmlogger.error(f"Directory '{parsed.workdir}' is not empty.")
-            return False
-
-        # collect info about the new project
-        aavmlogger.info("Please, provide information about your new project:")
-        project_info = {}
-        surgery_targets = set()
-        print("   |")
-        for key in ["name", "description", "organization", "maintainer"]:
-            info = surgery[key]
-            default = ""
-            title = info["title"]
+        # get list of runtimes available locally
+        aavmlogger.info("Fetching list of available runtimes from the machine in use...")
+        runtimes = fetch_machine_runtimes(machine=machine)
+        aavmlogger.info(f"{len(runtimes)} runtimes found on the machine.")
+        # define name validator
+        # noinspection PyTypedDict
+        fields["name"]["validator"] = validate_name
+        # define runtime validator function
+        # noinspection PyTypedDict
+        fields["runtime"]["validator"] = functools.partial(validate_runtime, runtimes, machine)
+        # collect info about the new machine
+        aavmlogger.info("Please, provide information about your new machine:")
+        machine_info = {}
+        space = "    |"
+        print(space)
+        for key, field in fields.items():
+            title = field["title"]
+            pattern = field["pattern"]
+            description = field["description"]
+            pattern_human = field["pattern_human"]
+            validator = field["validator"] or (lambda _: True)
             # ---
             done = False
             while not done:
-                res = input(f"   |\t{title}: ") or default
-                if not re.match(info['pattern'], res):
-                    aavmlogger.error(f"\tField '{info['title']}' must be {info['pattern_human']}.")
+                res = input(f"{space}\n{space}\t{title} ({description})\n{space}\t> ")
+                # match against pattern
+                if not re.match(pattern, res):
+                    aavmlogger.error(f"Field '{title}' must be {pattern_human}.")
                     continue
+                # run it through validator
+                valid = validator(res)
+                if valid is not True:
+                    aavmlogger.error(valid)
+                    continue
+                # ---
                 done = True
-                project_info[key] = res
-            surgery_targets.update(info['targets'])
-
-        # make new project
-        os.makedirs(parsed.workdir, exist_ok=True)
-        aavmlogger.info("New Project workspace: {}".format(parsed.workdir))
-
-        # copy skeleton
-        aavmlogger.debug(f"Creating empty project...")
-        copy_tree(skel_dir, parsed.workdir, dry_run=True)
-        copy_tree(skel_dir, parsed.workdir)
-
-        # perform surgery
-        for target in surgery_targets:
-            target_fpath = os.path.join(parsed.workdir, target)
-            aavmlogger.debug(f"Performing surgery on {target_fpath}...")
-            # read target from disk
-            with open(target_fpath, "rt") as fin:
-                content = json.load(fin)
-            # perform surgery
-            new_content = copy.deepcopy(content)
-            for k, v in content.items():
-                if isinstance(v, str):
-                    new_content[k] = v.format(**project_info)
-            # write target to disk
-            with open(target_fpath, "wt") as fout:
-                json.dump(new_content, fout, indent=4, sort_keys=True)
-        aavmlogger.debug("Surgery completed")
-
-        # show info about the new project
-        CLIInfoCommand.execute(None, parsed)
-        # TODO: add a link to the online docs on how to get started with the new project
-        aavmlogger.info(f"Your new project was created in '{parsed.workdir}'.")
+                machine_info[key] = res
+        # get runtime object
+        runtime = [r for r in runtimes if r.image == machine_info["runtime"]][0]
+        # make new machine
+        machine = AAVMMachine(
+            schema=MACHINE_SCHEMA_DEFAULT_VERSION,
+            version=MACHINE_DEFAULT_VERSION,
+            name=machine_info["name"],
+            path=os.path.join(aavmconfig.path, "machines", machine_info["name"]),
+            runtime=runtime,
+            description=machine_info["description"],
+            configuration={},
+            machine=machine
+        )
+        machine.to_disk()
+        # make root directory
+        # TODO
+        aavmlogger.info(f"Machine '{machine_info['name']}' created successfully.")
         # ---
         return True
+
+
+def validate_runtime(runtimes: List[AAVMRuntime], machine: Machine, runtime: str) -> \
+        Union[str, bool]:
+    # check whether the runtime is present in the machine
+    matches = [r for r in runtimes if r.image == runtime]
+    if len(matches) > 0:
+        return True
+    if not isinstance(machine, FromEnvMachine):
+        return f"The runtime '{runtime}' was not found, make sure you pull it using " \
+               f"'aavm runtime pull <runtime>' first."
+    return f"The runtime '{runtime}' was not found on machine '{machine.name}', " \
+           f"make sure you pull it using 'aavm -H {machine.name} runtime pull <runtime>' first."
+
+
+def validate_name(name: str) -> Union[str, bool]:
+    machine_dir = os.path.join(aavmconfig.path, "machines", name)
+    if os.path.exists(machine_dir):
+        return f"Another machine with the name '{name}' already exists. Choose another name."
+    return True

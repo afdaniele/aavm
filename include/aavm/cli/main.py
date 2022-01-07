@@ -1,29 +1,31 @@
 import argparse
 import logging
-import os
 import sys
 
+from cpk import cpkconfig
+
 import aavm
-from aavm import aavmconfig
 from aavm.exceptions import AAVMException
 
 from aavm.cli.logger import aavmlogger
 from aavm.cli.commands.create import CLICreateCommand
-from aavm.cli.commands.info import CLIInfoCommand
-# from aavm.cli.commands.build import CLIBuildCommand
-# from aavm.cli.commands.run import CLIRunCommand
+from aavm.cli.commands.inspect import CLIInspectCommand
+from aavm.cli.commands.list import CLIListCommand
+from aavm.cli.commands.start import CLIStartCommand
 # from aavm.cli.commands.clean import CLICleanCommand
 # from aavm.cli.commands.push import CLIPushCommand
 # from aavm.cli.commands.decorate import CLIDecorateCommand
 # from aavm.cli.commands.machine import CLIMachineCommand
 from aavm.cli.commands.runtime import CLIRuntimeCommand
-from aavm.utils.machine import get_machine
+
+from cpk.utils.machine import get_machine
 
 _supported_commands = {
     'create': CLICreateCommand,
-    'info': CLIInfoCommand,
-    # 'build': CLIBuildCommand,
-    # 'run': CLIRunCommand,
+    'inspect': CLIInspectCommand,
+    'ls': CLIListCommand,
+    'list': CLIListCommand,
+    'start': CLIStartCommand,
     # 'clean': CLICleanCommand,
     # 'push': CLIPushCommand,
     # 'decorate': CLIDecorateCommand,
@@ -55,7 +57,7 @@ def run():
     if parsed.debug:
         aavmlogger.setLevel(logging.DEBUG)
     # get machine
-    machine = get_machine(parsed, aavmconfig.machines)
+    machine = get_machine(parsed, cpkconfig.machines)
     # avoid commands using `parsed.machine`
     parsed.machine = None
     # execute command

@@ -4,20 +4,37 @@
     "title": "",
     "type": "object",
     "properties": {
-        "version": {
+        "schema": {
             "type": "string",
             "const": "1.0"
         },
+        "version": {
+            "type": "string",
+            "pattern": "[0-9]+\\.[0-9]+(\\.[0-9]+)?"
+        },
         "description": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
+        },
+        "runtime": {
+            "type": "string",
+            "minLength": 1
         },
         "configuration": {
-            "type": "object"
+            "type": "object",
+            "description": "Object that will be unpacked as kwargs in docker.containers.create()",
+            "additionalProperties": true
         },
         "machine": {
-            "type": "string"
+            "type": ["string", "null"]
         }
     },
-    "required": ["version", "description", "configuration", "machine"],
+    "required": [
+        "schema",
+        "version",
+        "description",
+        "runtime",
+        "machine"
+    ],
     "additionalProperties": false
 }
