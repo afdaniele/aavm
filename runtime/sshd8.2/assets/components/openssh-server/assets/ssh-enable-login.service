@@ -1,0 +1,9 @@
+[Unit]
+Description=Enabling SSH login given that AAVM stops systemd prematurely
+After=ssh.service
+
+[Service]
+ExecStart=rm -f /run/nologin
+
+[Install]
+WantedBy=multi-user.target

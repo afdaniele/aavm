@@ -1,0 +1,11 @@
+[Unit]
+Description=Docker Application Container Engine (Rootless)
+
+[Service]
+ExecStart=/usr/local/bin/dockerd-rootless
+
+User=1000
+Group=1000
+
+[Install]
+WantedBy=multi-user.target
