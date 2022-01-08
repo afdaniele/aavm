@@ -81,6 +81,17 @@ LABEL \
 # <== Do not change the code above this line
 # <==================================================
 
+# install QEMU (amd only)
+RUN set -eu; \
+	case "$ARCH" in \
+        # amd64
+		amd64) apt-get update; \
+               apt-get install -y --no-install-recommends qemu binfmt-support qemu-user-static; \
+               rm -rf /var/lib/apt/lists/* ;; \
+        # any other
+		*) echo >&2 "QEMU not supported on architecture ($ARCH)" ;;\
+	esac;
+
 # make aavm service directory
 ENV AAVM_DIR "/aavm"
 RUN mkdir \
