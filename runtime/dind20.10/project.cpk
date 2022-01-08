@@ -1,0 +1,9 @@
+{
+    "description": "Ubuntu 20.04 - Docker Engine v20.10.7 + Docker Compose v1.25.0",
+    "maintainer": "Andrea F. Daniele <afdaniele@ttic.edu>",
+    "name": "aavm-dind",
+    "tag": "20.10.7",
+    "organization": "afdaniele",
+    "schema": "1.0",
+    "template": null
+}

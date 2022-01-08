@@ -1,0 +1,9 @@
+{
+    "description": "Ubuntu 20.04 - OpenSSH Server v8.2 sandbox",
+    "maintainer": "Andrea F. Daniele <afdaniele@ttic.edu>",
+    "name": "aavm-sshd",
+    "tag": "8.2",
+    "organization": "afdaniele",
+    "schema": "1.0",
+    "template": null
+}

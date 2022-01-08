@@ -1,0 +1,60 @@
+# parameters
+ARG ARCH
+ARG NAME
+ARG ORGANIZATION
+ARG DESCRIPTION
+ARG MAINTAINER
+
+# ==================================================>
+# ==> Do not change the code below this line
+ARG BASE_REGISTRY=docker.io
+ARG BASE_ORGANIZATION=afdaniele
+ARG BASE_REPOSITORY=aavm-ubuntu
+ARG BASE_TAG=20.04
+
+# define base image
+FROM ${BASE_REGISTRY}/${BASE_ORGANIZATION}/${BASE_REPOSITORY}:${BASE_TAG}-${ARCH} as BASE
+
+# recall all arguments
+# - current project
+ARG ARCH
+ARG NAME
+ARG ORGANIZATION
+ARG DESCRIPTION
+ARG MAINTAINER
+# - base project
+ARG BASE_REGISTRY
+ARG BASE_ORGANIZATION
+ARG BASE_REPOSITORY
+ARG BASE_TAG
+
+# define/create project paths
+ARG PROJECT_PATH="${CPK_SOURCE_DIR}/${NAME}"
+RUN mkdir -p "${PROJECT_PATH}"
+WORKDIR "${PROJECT_PATH}"
+
+# install apt dependencies
+COPY ./dependencies-apt.txt "${PROJECT_PATH}/"
+RUN cpk-apt-install ${PROJECT_PATH}/dependencies-apt.txt
+
+# install python3 dependencies
+COPY ./dependencies-py3.txt "${PROJECT_PATH}/"
+RUN cpk-pip3-install ${PROJECT_PATH}/dependencies-py3.txt
+
+# copy project root
+COPY ./*.cpk ./*.sh ${PROJECT_PATH}/
+# <== Do not change the code above this line
+# <==================================================
+
+# install components
+# - Docker
+RUN aavm-component-install openssh-server
+LABEL aavm.environment.components.openssh-server="1"
+
+# store aavm metadata
+LABEL \
+    aavm.runtime="1" \
+    aavm.environment.os_family="linux" \
+    aavm.environment.arch="${ARCH}" \
+    aavm.environment.description="${DESCRIPTION}" \
+    aavm.environment.maintainer="${MAINTAINER}"
