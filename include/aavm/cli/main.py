@@ -2,16 +2,20 @@ import argparse
 import logging
 import sys
 
+import termcolor
+
 from cpk import cpkconfig
 
 import aavm
 from aavm.exceptions import AAVMException
 
-from aavm.cli.logger import aavmlogger
+from aavm.cli.logger import aavmlogger, update_logger
 from aavm.cli.commands.create import CLICreateCommand
 from aavm.cli.commands.inspect import CLIInspectCommand
 from aavm.cli.commands.list import CLIListCommand
 from aavm.cli.commands.start import CLIStartCommand
+from aavm.cli.commands.stop import CLIStopCommand
+from aavm.cli.commands.restart import CLIRestartCommand
 # from aavm.cli.commands.clean import CLICleanCommand
 # from aavm.cli.commands.push import CLIPushCommand
 # from aavm.cli.commands.decorate import CLIDecorateCommand
@@ -26,8 +30,8 @@ _supported_commands = {
     'ls': CLIListCommand,
     'list': CLIListCommand,
     'start': CLIStartCommand,
-    # 'clean': CLICleanCommand,
-    # 'push': CLIPushCommand,
+    'stop': CLIStopCommand,
+    'restart': CLIRestartCommand,
     # 'decorate': CLIDecorateCommand,
     # 'machine': CLIMachineCommand,
     'runtime': CLIRuntimeCommand,
@@ -35,7 +39,11 @@ _supported_commands = {
 
 
 def run():
-    aavmlogger.info(f"AAVM - Almost A Virtual Machine - v{aavm.__version__}")
+    intro = f"AAVM - Almost A Virtual Machine - v{aavm.__version__}"
+    separator = '-' * len(intro)
+    aavmlogger.info(f"{termcolor.RESET}{intro}\n{termcolor.RESET}{separator}")
+    # define global arguments
+    # noinspection DuplicatedCode
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
         'command',
@@ -55,7 +63,7 @@ def run():
     parsed = cmd_parser.parse_args(remaining)
     # enable debug
     if parsed.debug:
-        aavmlogger.setLevel(logging.DEBUG)
+        update_logger(logging.DEBUG)
     # get machine
     machine = get_machine(parsed, cpkconfig.machines)
     # avoid commands using `parsed.machine`

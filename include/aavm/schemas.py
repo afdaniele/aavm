@@ -14,10 +14,22 @@ def _get_schema(schema_fpath: str) -> dict:
 
 
 def get_machine_schema(schema: str) -> dict:
-    schema_fpath = os.path.join(_SCHEMAS_DIR, "machine.aavm", f"{schema}.json")
+    schema_fpath = os.path.join(_SCHEMAS_DIR, "machine.json", f"{schema}.json")
+    return _get_schema(schema_fpath)
+
+
+def get_runtime_schema(schema: str) -> dict:
+    schema_fpath = os.path.join(_SCHEMAS_DIR, "runtime.json", f"{schema}.json")
+    return _get_schema(schema_fpath)
+
+
+def get_index_schema(schema: str) -> dict:
+    schema_fpath = os.path.join(_SCHEMAS_DIR, "index", f"{schema}.json")
     return _get_schema(schema_fpath)
 
 
 __all__ = [
-    "get_machine_schema"
+    "get_machine_schema",
+    "get_runtime_schema",
+    "get_index_schema"
 ]

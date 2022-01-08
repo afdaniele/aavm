@@ -9,7 +9,8 @@ from ..logger import aavmlogger
 from ... import aavmconfig
 from ...types import Arguments
 from ...utils.docker import merge_container_configs
-from ...utils.runtime import fetch_machine_runtimes
+from ...utils.misc import aavm_label
+from ...utils.runtime import get_known_runtimes
 
 
 class CLIStartCommand(AbstractCLICommand):
@@ -20,12 +21,6 @@ class CLIStartCommand(AbstractCLICommand):
     def parser(parent: Optional[argparse.ArgumentParser] = None,
                args: Optional[Arguments] = None) -> argparse.ArgumentParser:
         parser = argparse.ArgumentParser(parents=[parent])
-        parser.add_argument(
-            "-n",
-            "--container",
-            default=None,
-            help="Name of the container"
-        )
         parser.add_argument(
             "-t",
             "--attach",
@@ -55,13 +50,17 @@ class CLIStartCommand(AbstractCLICommand):
         container = machine.container
         if container is not None:
             if container.status != "running":
+                aavmlogger.info("Starting machine...")
                 container.start()
                 aavmlogger.info("Machine started, you should see it running with the container "
                                 f"name '{container.name}'.")
-                return True
+            else:
+                aavmlogger.info(f"The machine '{machine.name}' appears to be running already."
+                                f" Nothing to do.")
+            return True
         # make sure the runtime is downloaded
         aavmlogger.debug("Fetching list of available runtimes from the machine in use...")
-        machine_runtimes = fetch_machine_runtimes(machine=cpk_machine)
+        machine_runtimes = get_known_runtimes(machine=cpk_machine)
         aavmlogger.debug(f"{len(machine_runtimes)} runtimes found on the machine.")
         machine_matches = [r for r in machine_runtimes if r.image == machine.runtime.image]
         if len(machine_matches) <= 0:
@@ -75,17 +74,22 @@ class CLIStartCommand(AbstractCLICommand):
         machine_cfg = machine.configuration
         container_cfg = merge_container_configs(runtime_cfg, machine_cfg)
         # add image from the runtime to the container configutation
-        container_cfg["image"] = machine.runtime.image
+        container_cfg["image"] = machine.runtime.image.compile()
         # define container's name
-        container_name = f"aavm-machine-{machine.name}"
-        container_cfg["name"] = container_name
+        container_cfg["name"] = machine.container_name
+        # add machine.name label
+        container_cfg["labels"] = {
+            aavm_label("machine.name"): machine.name
+        }
         # make a new container for this machine
         docker = machine.machine.get_client()
-        aavmlogger.debug(f"Creating container with configuration:\n"
+        aavmlogger.debug(f"Creating container with configuration:\n\n"
                          f"{json.dumps(container_cfg, indent=4)}\n")
         container = docker.containers.create(**container_cfg)
         # start container
+        aavmlogger.info("Starting machine...")
         container.start()
+        # TODO: implement '--attach'
         aavmlogger.info("Machine started, you should see it running with the container "
                         f"name '{container.name}'.")
         # ---

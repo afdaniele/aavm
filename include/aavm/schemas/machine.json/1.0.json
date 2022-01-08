@@ -26,7 +26,10 @@
             "additionalProperties": true
         },
         "machine": {
-            "type": ["string", "null"]
+            "type": [
+                "string",
+                "null"
+            ]
         }
     },
     "required": [

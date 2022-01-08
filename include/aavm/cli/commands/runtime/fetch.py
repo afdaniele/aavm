@@ -21,7 +21,7 @@ class CLIRuntimeFetchCommand(AbstractCLICommand):
             "--all",
             action="store_true",
             default=False,
-            help="Show runtimes of any architecture",
+            help="Get runtimes of any architecture",
         )
         # ---
         return parser
@@ -34,24 +34,30 @@ class CLIRuntimeFetchCommand(AbstractCLICommand):
         # filter by arch
         arch = machine.get_architecture()
         if not parsed.all:
-            runtimes = [r for r in runtimes if r.arch == arch]
+            runtimes = [r for r in runtimes if r.image.arch == arch]
+        # store/update the runtimes on disk
+        for runtime in runtimes:
+            runtime.to_disk()
         # show list of runtimes available
         data = [
-            ["#", "Name", "Description", "Maintainer", "Arch", "Downloaded"] if parsed.all else
-            ["#", "Name", "Description", "Maintainer", "Downloaded"]
+            ["#", "Name", "Description", "Arch", "Downloaded"] if parsed.all else
+            ["#", "Name", "Description", "Downloaded"]
         ]
+        aavmlogger.info("The following runtime descriptors were downloaded.")
+        aavmlogger.info("You can now pull any of these runtimes using the command,\n\n"
+                        "\t> aavm runtime pull <runtime>\n")
         for i, runtime in enumerate(runtimes):
-            row = [str(i), runtime.image, runtime.description, runtime.maintainer]
+            row = [str(i), runtime.image.compile(), runtime.description]
             # architecture
             if parsed.all:
-                row.append(runtime.arch)
+                row.append(runtime.image.arch)
             # whether it is downloaded already
             downloaded = colored('Yes', 'green') if runtime.downloaded else colored('No', 'red')
             row.append(downloaded)
             # add row to table
             data += [row]
         table = Table(data)
-        table.title = " Available Runtimes "
+        table.title = " Runtimes Fetched "
         print()
         print(table.table)
         # ---

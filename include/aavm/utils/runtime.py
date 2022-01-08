@@ -1,13 +1,21 @@
+import base64
+import copy
+import glob
+import os
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 import docker
+import jsonschema
 import requests
-from cpk.types import Machine, DockerImageName
+
+from aavm.exceptions import AAVMException
+from aavm.schemas import get_index_schema
+from cpk.types import Machine
 
 from aavm.cli import aavmlogger
-from aavm.constants import AAVM_RUNTIMES_INDEX_URL
+from aavm.constants import AAVM_RUNTIMES_INDEX_URL, AAVM_RUNTIMES_INDEX_VERSION
 from aavm.types import AAVMRuntime
-from aavm.utils.misc import aavm_label
 
 
 def fetch_remote_runtimes(check_downloaded: bool = False, machine: Optional[Machine] = None) -> \
@@ -19,25 +27,27 @@ def fetch_remote_runtimes(check_downloaded: bool = False, machine: Optional[Mach
     index_url = AAVM_RUNTIMES_INDEX_URL
     aavmlogger.debug(f"GET: {index_url}")
     runtimes: List[Dict[str, Any]] = requests.get(index_url).json()
+    # validate data against its declared schema
+    schema = get_index_schema(AAVM_RUNTIMES_INDEX_VERSION)
+    try:
+        jsonschema.validate(runtimes, schema=schema)
+    except jsonschema.ValidationError as e:
+        raise AAVMException(str(e))
     # process runtimes
     out: List[AAVMRuntime] = []
     for runtime in runtimes:
-        for arch in runtime["arch"]:
-            r = AAVMRuntime(
-                name=runtime["name"],
-                tag=runtime["tag"],
-                organization=runtime["organization"],
-                description=runtime["description"],
-                maintainer=runtime["maintainer"],
-                arch=arch,
-                configuration=runtime.get("configuration", {}),
-                registry=runtime.get("registry", None),
-                metadata=runtime.get("metadata", {})
-            )
+        for arch in runtime["image"]["arch"]:
+            data = copy.deepcopy(runtime)
+            data["image"]["arch"] = arch
+            r = AAVMRuntime.deserialize(data)
+            # add configuration as well
+            r.configuration = data["configuration"]
+            # mark this runtime as official (it is coming from the index after all)
+            r.official = True
             # check whether it is downloaded already
             if check_downloaded:
                 try:
-                    machine.get_client().images.get(r.image)
+                    machine.get_client().images.get(r.image.compile())
                     r.downloaded = True
                 except docker.errors.ImageNotFound:
                     r.downloaded = False
@@ -47,42 +57,29 @@ def fetch_remote_runtimes(check_downloaded: bool = False, machine: Optional[Mach
     return out
 
 
-def fetch_machine_runtimes(machine: Machine) -> List[AAVMRuntime]:
-    client = machine.get_client()
-    runtime_label = aavm_label("runtime", "1")
-    runtimes = client.images.list(filters={"label": runtime_label})
-    out: List[AAVMRuntime] = []
-    # get runtime descriptions from images
-    for runtime in runtimes:
-        names = runtime.tags
-        # we don't consider runtimes that do not have a name
-        if len(names) <= 0:
+def get_known_runtimes(machine: Optional[Machine] = None) -> List[AAVMRuntime]:
+    from aavm import aavmconfig
+    runtimes_dir = os.path.join(aavmconfig.path, "runtimes")
+    runtime_pattern = os.path.join(runtimes_dir, "**/runtime.json")
+    # iterate over the runtimes on disk
+    runtimes = []
+    for runtime_cfg_fpath in glob.glob(runtime_pattern, recursive=True):
+        runtime_dir = Path(runtime_cfg_fpath).parent
+        runtime_name = os.path.relpath(runtime_dir, runtimes_dir)
+        try:
+            runtime = AAVMRuntime.from_disk(str(runtime_dir))
+        except (KeyError, ValueError) as e:
+            aavmlogger.warning(f"An error occurred while loading the runtime '{runtime_name}', "
+                               f"the error reads:\n{str(e)}")
             continue
-        # parse best name
-        image: Optional[DockerImageName] = None
-        for name in names:
+        # check whether the runtime is available on the given machine (if any)
+        if machine is not None:
             try:
-                image = DockerImageName.from_image_name(name)
-            except ValueError:
-                pass
-        # we don't consider runtimes that do not have at least a valid name
-        if image is None:
-            continue
-        # flatten registry
-        registry = image.registry.compile() if image.registry else None
-        # create runtime descriptor
-        r = AAVMRuntime(
-            name=image.repository,
-            tag=image.tag,
-            organization=image.user,
-            description=runtime.labels.get(aavm_label("environment.description")),
-            maintainer=runtime.labels.get(aavm_label("environment.maintainer")),
-            arch=runtime.labels.get(aavm_label("environment.arch")),
-            configuration={},
-            registry=registry,
-            metadata=runtime.labels.get(aavm_label("environment.metadata"), {})
-        )
-        # add runtime to output
-        out.append(r)
+                machine.get_client().images.get(runtime.image.compile())
+                runtime.downloaded = True
+            except docker.errors.ImageNotFound:
+                runtime.downloaded = False
+        # we have loaded a valid runtime
+        runtimes.append(runtime)
     # ---
-    return out
+    return runtimes

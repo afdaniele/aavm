@@ -1,14 +1,16 @@
+import base64
 import dataclasses
 import json
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from types import SimpleNamespace
-from typing import List, Dict, Optional, Any, Union
+from typing import List, Dict, Optional, Any, Union, ClassVar
 
 import jsonschema
 from docker.models.containers import Container
 
+from aavm.utils.docker import sanitize_image_name
 from cpk.utils.machine import get_machine
 
 from cpk.machine import FromEnvMachine
@@ -16,13 +18,13 @@ from cpk.machine import FromEnvMachine
 from cpk import cpkconfig
 
 from aavm.exceptions import AAVMException
-from aavm.schemas import get_machine_schema
-from cpk.types import Machine as CPKMachine, DockerImageName
+from aavm.schemas import get_machine_schema, get_runtime_schema
+from cpk.types import Machine as CPKMachine, DockerImageName, DockerImageRegistry
 
 Arguments = List[str]
-Arch = str
-Environment = dict
-ContainerConfiguration = dict
+Environment = Dict[str, str]
+ContainerConfiguration = Dict[str, Any]
+RuntimeMetadata = Dict[str, Any]
 
 
 class ISerializable(ABC):
@@ -33,85 +35,146 @@ class ISerializable(ABC):
 
     @classmethod
     @abstractmethod
-    def deserialize(cls, data: Any) -> Any:
+    def deserialize(cls, *args, **kwargs) -> Any:
         pass
 
 
 @dataclasses.dataclass
-class DataclassSerializable(ISerializable):
+class AAVMRuntime(ISerializable):
+    schema: str
+    version: str
+    description: str
+    image: DockerImageName
+    maintainer: str
+    configuration: ContainerConfiguration
+    metadata: RuntimeMetadata = dataclasses.field(default_factory=dict)
+    downloaded: Optional[bool] = None
+    official: bool = False
+
+    _registry: ClassVar[Dict[str, 'AAVMRuntime']] = {}
+
+    def __post_init__(self):
+        # update registry
+        self._registry[self.image.compile(allow_defaults=True)] = self
 
     def serialize(self) -> dict:
-        data = {}
-        for field in dataclasses.fields(self):
-            key = field.name
-            if key.startswith("_"):
-                continue
-            value = getattr(self, key)
-            if isinstance(value, ISerializable):
-                value = value.serialize()
-            data[key] = value
-        return data
+        return {
+            "schema": self.schema,
+            "version": self.version,
+            "description": self.description,
+            "image": dataclasses.asdict(self.image),
+            "maintainer": self.maintainer,
+            "metadata": self.metadata,
+            "official": self.official
+        }
 
     @classmethod
-    def deserialize(cls, data) -> 'DataclassSerializable':
-        out = {}
-        for field in dataclasses.fields(cls):
-            key = field.name
-            if key.startswith("_"):
-                continue
-            value = data[key]
-            if issubclass(field.type, ISerializable):
-                value = field.type.deserialize(value)
-            out[key] = value
-        return cls(**out)
-
-
-@dataclasses.dataclass
-class AAVMRuntime(DataclassSerializable):
-    name: str
-    tag: str
-    organization: str
-    description: str
-    maintainer: str
-    arch: Arch
-    configuration: ContainerConfiguration
-    registry: Optional[str] = None
-    metadata: Dict[str, Any] = dataclasses.field(default_factory=dict)
-    downloaded: Optional[bool] = None
-
-    def serialize(self) -> str:
-        return self.image
-
-    @classmethod
-    def deserialize(cls, image: str) -> 'AAVMRuntime':
-        return cls.from_docker_image_obj(DockerImageName.from_image_name(image))
-
-    @classmethod
-    def from_docker_image_obj(cls, image: DockerImageName) -> 'AAVMRuntime':
-        # flatten registry
-        registry = image.registry.compile() if image.registry else None
-        # create runtime descriptor
+    def deserialize(cls, data: dict) -> 'AAVMRuntime':
+        # get image name
+        image = DockerImageName(**data["image"])
+        # update registry if any is given
+        if "registry" in data["image"]:
+            image.registry = DockerImageRegistry(**data["image"]["registry"])
+        # create runtime object
         return AAVMRuntime(
-            name=image.repository,
-            tag=image.tag,
-            organization=image.user,
-            description="",
-            maintainer="",
-            arch=image.arch,
-            registry=registry,
-            metadata={},
-            configuration={}
+            schema=data["schema"],
+            version=data["version"],
+            description=data["description"],
+            image=image,
+            maintainer=data["maintainer"],
+            configuration={},
+            metadata=data.get("metadata", {}),
+            official=data.get("official", False)
         )
 
-    @property
-    def image(self) -> str:
-        registry = self.registry or ""
-        organization = self.organization
-        name = self.name
-        tag = self.tag
-        arch = self.arch
-        # compile image name
-        return f"{registry}/{organization}/{name}:{tag}-{arch}".lstrip("/")
+    @classmethod
+    def from_image_name(cls, image: str) -> 'AAVMRuntime':
+        image = sanitize_image_name(image)
+        if image in cls._registry:
+            return cls._registry[image]
+        # (attempt to) load from disk
+        from aavm import aavmconfig
+        runtimes_dir = os.path.join(aavmconfig.path, "runtimes")
+        runtime_dir = os.path.join(runtimes_dir, image)
+        if not os.path.exists(runtime_dir) or not os.path.isdir(runtime_dir):
+            raise AAVMException(f"Runtime with image '{image}' not found.")
+        # load from disk
+        return cls.from_disk(runtime_dir)
+
+    # noinspection DuplicatedCode
+    @classmethod
+    def from_disk(cls, path: str) -> 'AAVMRuntime':
+        # compile runtime file path
+        runtime_file = os.path.join(path, "runtime.json")
+        # make sure a config file exists
+        if not os.path.exists(runtime_file):
+            raise AAVMException(f"Path '{path}' does not contain a 'runtime.json' file.")
+        if not os.path.isfile(runtime_file):
+            raise AAVMException(f"Path '{runtime_file}' is not a file.")
+        # load runtime file
+        try:
+            with open(runtime_file, "rt") as fin:
+                data = json.load(fin)
+        except json.JSONDecodeError as e:
+            raise AAVMException(f"File '{runtime_file}' is not a valid JSON file. "
+                                f"Error reads: {e}")
+        # make sure the object we loaded is a dictionary
+        if not isinstance(data, dict):
+            raise AAVMException(f"File '{runtime_file}' must contain a JSON-serialized "
+                                f"dictionary.")
+        # make sure the object loaded contains the field 'schema'
+        if "schema" not in data:
+            raise AAVMException(f"File '{runtime_file}' must declare a field 'schema' "
+                                f"at its root.")
+        schema_version = data["schema"]
+        # validate data against its declared schema
+        schema = get_runtime_schema(schema_version)
+        try:
+            jsonschema.validate(data, schema=schema)
+        except jsonschema.ValidationError as e:
+            raise AAVMException(str(e))
+        # create runtime object
+        runtime = cls.deserialize(data)
+        # load configuration file
+        runtime.configuration = cls.load_configuration(path)
+        # ---
+        return runtime
+
+    # noinspection DuplicatedCode
+    @classmethod
+    def load_configuration(cls, path: str) -> ContainerConfiguration:
+        configuration_file = os.path.join(path, "configuration.json")
+        # make sure the config file exists
+        if not os.path.exists(configuration_file):
+            raise AAVMException(f"Path '{path}' does not contain a 'configuration.json' file.")
+        if not os.path.isfile(configuration_file):
+            raise AAVMException(f"Path '{configuration_file}' is not a file.")
+        # load configuration file
+        try:
+            with open(configuration_file, "rt") as fin:
+                config = json.load(fin)
+        except json.JSONDecodeError as e:
+            raise AAVMException(f"File '{configuration_file}' is not a valid JSON file. "
+                                f"Error reads: {e}")
+        # ---
+        return config
+
+    def to_disk(self):
+        from aavm.config import aavmconfig
+        # compile runtime dir path and make sure it exists on disk
+        image_name = self.image.compile(allow_defaults=True)
+        runtime_dir = os.path.join(aavmconfig.path, "runtimes", image_name)
+        os.makedirs(runtime_dir, exist_ok=True)
+        # compile runtime file path
+        runtime_file = os.path.join(runtime_dir, "runtime.json")
+        # serialize self to disk
+        data = self.serialize()
+        with open(runtime_file, "wt") as fout:
+            json.dump(data, fout, indent=4)
+        # write configuration to file
+        configuration_file = os.path.join(runtime_dir, "configuration.json")
+        with open(configuration_file, "wt") as fout:
+            json.dump(self.configuration, fout, indent=4)
 
 
 class AAVMMachineRoot(str, ISerializable):
@@ -119,7 +182,7 @@ class AAVMMachineRoot(str, ISerializable):
 
 
 @dataclasses.dataclass
-class AAVMMachine(DataclassSerializable):
+class AAVMMachine(ISerializable):
     schema: str
     version: str
     name: str
@@ -134,6 +197,10 @@ class AAVMMachine(DataclassSerializable):
     @property
     def root(self) -> AAVMMachineRoot:
         return AAVMMachineRoot(os.path.join(self.path, "root"))
+
+    @property
+    def container_name(self) -> str:
+        return f"aavm-machine-{self.name}"
 
     @property
     def container(self) -> Optional['AAVMContainer']:
@@ -156,6 +223,44 @@ class AAVMMachine(DataclassSerializable):
             return "down"
         return container.status
 
+    def make_root(self, exist_ok: bool = False):
+        os.makedirs(self.root, exist_ok=exist_ok)
+
+    def serialize(self) -> dict:
+        return {
+            "schema": self.schema,
+            "version": self.version,
+            "runtime": self.runtime.image.compile(allow_defaults=True),
+            "description": self.description,
+            "machine": self.machine.name,
+        }
+
+    @classmethod
+    def deserialize(cls, name: str, data: dict, path: Optional[str] = None) -> 'AAVMMachine':
+        # get runtime
+        runtime = AAVMRuntime.from_image_name(data["runtime"])
+        # get configuration
+        configuration = cls.load_configuration(path) if path else {}
+        # get machine
+        cpk_machine_name = data["machine"]
+        cpk_machine = None
+        if cpk_machine_name:
+            cpk_machine = cpkconfig.machines.get(cpk_machine_name, None)
+            if cpk_machine is None:
+                raise AAVMException(f"AAVM Machine with name '{name}' is set to run on the CPK "
+                                    f"machine '{cpk_machine_name}' but such machine was not found.")
+        # reconstruct AAVM machine object
+        return AAVMMachine(
+            schema=data["schema"],
+            version=data["version"],
+            runtime=runtime,
+            name=name,
+            path=path,
+            description=data["description"],
+            configuration=configuration,
+            machine=cpk_machine
+        )
+
     def to_disk(self):
         from aavm import aavmconfig
         aavm_config_dir = aavmconfig.path
@@ -169,10 +274,6 @@ class AAVMMachine(DataclassSerializable):
         # store only the machine's name
         data["machine"] = self.machine.name if not isinstance(self.machine, FromEnvMachine) \
             else None
-        # do not store 'name', 'configuration' and 'path'
-        del data["name"]
-        del data["path"]
-        del data["configuration"]
         # write dictionary to disk
         with open(machine_file, "wt") as fout:
             json.dump(data, fout, indent=4)
@@ -181,6 +282,7 @@ class AAVMMachine(DataclassSerializable):
         with open(configuration_file, "wt") as fout:
             json.dump(self.configuration, fout, indent=4)
 
+    # noinspection DuplicatedCode
     @classmethod
     def from_disk(cls, path: str) -> 'AAVMMachine':
         path = os.path.abspath(path)
@@ -219,13 +321,25 @@ class AAVMMachine(DataclassSerializable):
             jsonschema.validate(data, schema=schema)
         except jsonschema.ValidationError as e:
             raise AAVMException(str(e))
-        # populate 'name', 'configuration' and 'path'
-        data["name"] = Path(path).stem
-        data["path"] = path
-        data["configuration"] = {}
         # deserialize
-        machine = cls.deserialize(data)
+        machine = cls.deserialize(
+            name=Path(path).stem,
+            path=path,
+            data=data
+        )
         # load configuration file
+        machine.configuration = cls.load_configuration(path)
+        # expand CPK Machine field
+        namespace = SimpleNamespace(machine=None)
+        if data["machine"] != "from-environment":
+            namespace.machine = data["machine"]
+        # noinspection PyTypeChecker
+        machine.machine = get_machine(namespace, cpkconfig.machines)
+        # ---
+        return machine
+
+    @classmethod
+    def load_configuration(cls, path: str) -> ContainerConfiguration:
         configuration_file = os.path.join(path, "configuration.json")
         # make sure the config file exists
         if not os.path.exists(configuration_file):
@@ -239,26 +353,25 @@ class AAVMMachine(DataclassSerializable):
         except json.JSONDecodeError as e:
             raise AAVMException(f"File '{configuration_file}' is not a valid JSON file. "
                                 f"Error reads: {e}")
-        machine.configuration = config
-        # expand CPK Machine field
-        namespace = SimpleNamespace(machine=None)
-        if data["machine"] != "from-environment":
-            namespace.machine = data["machine"]
-        # noinspection PyTypeChecker
-        machine.machine = get_machine(namespace, cpkconfig.machines)
-        # ---
-        return machine
+        return config
 
 
 @dataclasses.dataclass
 class AAVMConfiguration:
     path: str
-    machines: Dict[str, AAVMMachine]
+
+    _machines: Dict[str, AAVMMachine] = dataclasses.field(init=False, default=None)
+
+    @property
+    def machines(self) -> Dict[str, AAVMMachine]:
+        if self._machines is None:
+            from aavm.utils.machine import load_machines
+            self._machines = load_machines(os.path.join(self.path, "machines"))
+        return self._machines
 
 
 class AAVMContainer(Container):
     pass
-
 
 # @dataclasses.dataclass
 # class AAVMFileMapping:
@@ -391,3 +504,5 @@ class AAVMContainer(Container):
 # Tag:\t\t{self.tag}
 # Arch:\t\t{self.arch}
 #         """
+
+

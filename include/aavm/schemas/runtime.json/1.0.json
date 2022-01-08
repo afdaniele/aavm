@@ -1,0 +1,99 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "aavm-runtime-schema-1-0",
+    "title": "",
+    "type": "object",
+    "description": "Description of a runtime",
+    "properties": {
+        "schema": {
+            "type": "string",
+            "description": "Schema version this runtime object is using",
+            "pattern": "[0-9]+\\.[0-9]+(\\.[0-9]+)?"
+        },
+        "version": {
+            "type": "string",
+            "description": "Runtime version",
+            "pattern": "[0-9]+\\.[0-9]+(\\.[0-9]+)?"
+        },
+        "description": {
+            "type": "string",
+            "description": "Description of the runtime",
+            "minLength": 1
+        },
+        "maintainer": {
+            "type": "string",
+            "description": "Runtime's maintainer in the format 'First Last <Email>'",
+            "minLength": 1
+        },
+        "image": {
+            "type": "object",
+            "description": "Docker image implementing the runtime",
+            "properties": {
+                "registry": {
+                    "type": "object",
+                    "description": "Docker registry hosting the runtime",
+                    "properties": {
+                        "hostname": {
+                            "type": "string",
+                            "description": "Hostname of the Docker registry",
+                            "minLength": 1
+                        },
+                        "port": {
+                            "type": "integer",
+                            "description": "Port to the Docker registry",
+                            "minimum": 1,
+                            "maximum": 65535
+                        }
+                    }
+                },
+                "user": {
+                    "type": "string",
+                    "description": "Organization or User releasing the runtime",
+                    "minLength": 1
+                },
+                "repository": {
+                    "type": "string",
+                    "description": "Name of the Docker repository implementing the runtime",
+                    "minLength": 1
+                },
+                "tag": {
+                    "type": "string",
+                    "description": "Tag of the Docker image implementing the runtime",
+                    "minLength": 1
+                },
+                "arch": {
+                    "type": "string",
+                    "description": "Architecture this runtime is targeting",
+                    "enum": [
+                        "amd64",
+                        "arm32v7",
+                        "arm64v8"
+                    ]
+                }
+            },
+            "required": [
+                "user",
+                "repository",
+                "tag",
+                "arch"
+            ]
+        },
+        "metadata": {
+            "type": "object",
+            "description": "Runtime-specific metadata"
+        },
+        "official": {
+            "type": "boolean",
+            "description": "Whether the runtime is an official one"
+        }
+    },
+    "required": [
+        "schema",
+        "version",
+        "description",
+        "maintainer",
+        "image",
+        "official"
+    ],
+    "additionalProperties": false
+}

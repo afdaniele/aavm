@@ -1,89 +1,68 @@
 import logging
-import platform
-import sys
-from functools import partial
-from logging import Logger, StreamHandler, Formatter, getLogger
+from logging import getLogger
+
+from termcolor import colored
 
 from aavm.constants import DEBUG
 
-
 # create logger
-logging.basicConfig()
-aavmlogger = getLogger('vm')
-aavmlogger.setLevel(logging.INFO)
+aavmlogger = getLogger('aavm')
+
+colors = {
+    'critical': 'red',
+    'debug': 'magenta',
+    'error': 'red',
+    'info': 'green',
+    'notice': 'magenta',
+    'spam': 'green',
+    'success': 'green',
+    'verbose': 'blue',
+    'warning': 'yellow'
+}
+
+# color parts of the left bar
+levelname = colored("%(levelname)8s", "grey")
+filename_lineno = colored("%(filename)15s:%(lineno)-4s", "blue")
+
+# compile format
+format = f"%(name)4s|{filename_lineno} - %(funcName)-15s : %(message)s" \
+    if DEBUG else f"%(name)4s|{levelname} : %(message)s"
+indent = " " * (44 if DEBUG else 14)
 
 
-def setup_logging_format(fmt: str):
-    logging.basicConfig(format=fmt)
-    # noinspection PyUnresolvedReferences
-    root = Logger.root
-    if root.handlers:
-        for handler in root.handlers:
-            if isinstance(handler, StreamHandler):
-                formatter = Formatter(fmt)
-                handler.setFormatter(formatter)
-    else:
-        logging.basicConfig(format=fmt)
+class CustomFilter(logging.Filter):
+    def filter(self, record):
+        lines = str(record.msg).split("\n")
+        color = colors[record.levelname.lower()]
+        lines = map(lambda l: colored(l, color) if color else l, lines)
+        record.msg = f"\n{indent}: ".join(lines)
+        return super(CustomFilter, self).filter(record)
 
 
-def add_coloring_to_emit_ansi(fn, indent: int = 0):
+# handle multi-line messages
+aavmlogger.addFilter(CustomFilter())
 
-    # add methods we need to the class
-    def new(*args):
-        levelno = args[1].levelno
-        if levelno >= 50:
-            color = "\x1b[31m"  # red
-        elif levelno >= 40:
-            color = "\x1b[31m"  # red
-        elif levelno >= 30:
-            color = "\x1b[33m"  # yellow
-        elif levelno >= 20:
-            color = "\x1b[32m"  # green
-        elif levelno >= 10:
-            color = "\x1b[35m"  # pink
-        else:
-            color = "\x1b[0m"  # normal
-        msg = str(args[1].msg)
-        lines = msg.split("\n")
-
-        def color_line(enum_line):
-            i, line = enum_line
-            tab = " " * (indent - 2) + ": " if i > 0 else ""
-            return "%s%s%s%s" % ("", color, line, "\x1b[0m")
-
-        lines = list(map(color_line, enumerate(lines)))
-        args[1].msg = "\n".join(lines)
-        return fn(*args)
-    # ---
-    return new
+# create console handler
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+# create formatter and add it to the handlers
+formatter = logging.Formatter(format)
+ch.setFormatter(formatter)
+# add the handlers to logger
+aavmlogger.addHandler(ch)
 
 
-format_indent = 15
-setup_logging_format("%(name)2s|%(levelname)8s : %(message)s")
-if DEBUG:
-    format_indent = 44
-    setup_logging_format("%(name)2s|%(filename)15s:%(lineno)-4s - %(funcName)-15s| %(message)s")
-
-if platform.system() != "Windows":
-    emit2 = add_coloring_to_emit_ansi(StreamHandler.emit, format_indent)
-    StreamHandler.emit = emit2
+def update_logger(level: int):
+    # set level
+    aavmlogger.setLevel(level)
+    ch.setLevel(level)
 
 
-def plain(text: str = "", end: str = ""):
-    if end == "" and text.rstrip(" ").endswith("\n"):
-        text = text.rstrip("\n")
-        end = "\n"
-    text = "\n".join([
-        (" " * 3 + "| " + line)
-        for line in text.split('\n')
-    ]) + end
-    sys.stdout.write(text)
-    sys.stdout.flush()
+# set INFO as default level
+update_logger(logging.INFO)
 
-
-setattr(aavmlogger, "print", partial(plain, end="\n"))
-setattr(aavmlogger, "write", plain)
 
 __all__ = [
-    "aavmlogger"
+    "aavmlogger",
+    "update_logger"
 ]

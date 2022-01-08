@@ -30,6 +30,7 @@ def load_machines(path: str) -> Dict[str, AAVMMachine]:
 def get_container(machine: AAVMMachine) -> Optional[AAVMContainer]:
     client = machine.machine.get_client()
     containers = client.containers.list(
+        all=True,
         filters={
             "label": aavm_label("machine.name", machine.name),
         }

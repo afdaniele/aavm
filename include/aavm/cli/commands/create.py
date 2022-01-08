@@ -1,17 +1,18 @@
 import argparse
-import functools
 import os
 import re
-from typing import Optional, Union, List
+from typing import Optional
 
-from cpk.machine import FromEnvMachine
 from cpk.types import Machine
 from .. import AbstractCLICommand
 from ..logger import aavmlogger
 from ... import aavmconfig
 from ...constants import MACHINE_SCHEMA_DEFAULT_VERSION, MACHINE_DEFAULT_VERSION
+from ...exceptions import AAVMException
 from ...types import Arguments, AAVMMachine, AAVMRuntime
-from ...utils.runtime import fetch_machine_runtimes
+
+EmptyValidator = lambda *_: _
+
 
 fields = {
     "name": {
@@ -19,21 +20,21 @@ fields = {
         "description": "A unique name for your machine",
         "pattern": r"^[a-zA-Z0-9-_]+$",
         "pattern_human": "an alphanumeric string [a-zA-Z0-9-_]",
-        "validator": None
+        "validator": EmptyValidator
     },
     "description": {
         "title": "Description",
         "description": "A more user-friendly description for your machine",
         "pattern": r"^.+$",
         "pattern_human": "a non-empty free text",
-        "validator": None
+        "validator": EmptyValidator
     },
     "runtime": {
         "title": "Runtime",
-        "description": "The AAVM runtime to use as base for your machine",
+        "description": "The runtime to use as base for your machine",
         "pattern": r"^.+$",
         "pattern_human": "a valid Docker image name",
-        "validator": None
+        "validator": EmptyValidator
     },
 }
 
@@ -50,21 +51,14 @@ class CLICreateCommand(AbstractCLICommand):
 
     @staticmethod
     def execute(machine: Optional[Machine], parsed: argparse.Namespace) -> bool:
-        # get list of runtimes available locally
-        aavmlogger.info("Fetching list of available runtimes from the machine in use...")
-        runtimes = fetch_machine_runtimes(machine=machine)
-        aavmlogger.info(f"{len(runtimes)} runtimes found on the machine.")
-        # define name validator
-        # noinspection PyTypedDict
+        # attach validators
         fields["name"]["validator"] = validate_name
-        # define runtime validator function
-        # noinspection PyTypedDict
-        fields["runtime"]["validator"] = functools.partial(validate_runtime, runtimes, machine)
+        fields["runtime"]["validator"] = AAVMRuntime.from_image_name
         # collect info about the new machine
-        aavmlogger.info("Please, provide information about your new machine:")
+        aavmlogger.info("Please, provide information about your new machine:\n"
+                        "(provide the string 'q' to quit at any time)")
         machine_info = {}
         space = "    |"
-        print(space)
         for key, field in fields.items():
             title = field["title"]
             pattern = field["pattern"]
@@ -75,54 +69,44 @@ class CLICreateCommand(AbstractCLICommand):
             done = False
             while not done:
                 res = input(f"{space}\n{space}\t{title} ({description})\n{space}\t> ")
+                # break when 'q' is given
+                if res.lower().strip() == "q":
+                    aavmlogger.info('Quitting...')
+                    return False
                 # match against pattern
                 if not re.match(pattern, res):
                     aavmlogger.error(f"Field '{title}' must be {pattern_human}.")
                     continue
                 # run it through validator
-                valid = validator(res)
-                if valid is not True:
-                    aavmlogger.error(valid)
+                try:
+                    validator(res)
+                except AAVMException as e:
+                    aavmlogger.error(str(e))
                     continue
                 # ---
                 done = True
                 machine_info[key] = res
-        # get runtime object
-        runtime = [r for r in runtimes if r.image == machine_info["runtime"]][0]
         # make new machine
         machine = AAVMMachine(
             schema=MACHINE_SCHEMA_DEFAULT_VERSION,
             version=MACHINE_DEFAULT_VERSION,
             name=machine_info["name"],
             path=os.path.join(aavmconfig.path, "machines", machine_info["name"]),
-            runtime=runtime,
+            runtime=AAVMRuntime.from_image_name(machine_info["runtime"]),
             description=machine_info["description"],
             configuration={},
             machine=machine
         )
         machine.to_disk()
         # make root directory
-        # TODO
-        aavmlogger.info(f"Machine '{machine_info['name']}' created successfully.")
+        machine.make_root()
         # ---
+        aavmlogger.info(f"Machine '{machine_info['name']}' created successfully.")
         return True
 
 
-def validate_runtime(runtimes: List[AAVMRuntime], machine: Machine, runtime: str) -> \
-        Union[str, bool]:
-    # check whether the runtime is present in the machine
-    matches = [r for r in runtimes if r.image == runtime]
-    if len(matches) > 0:
-        return True
-    if not isinstance(machine, FromEnvMachine):
-        return f"The runtime '{runtime}' was not found, make sure you pull it using " \
-               f"'aavm runtime pull <runtime>' first."
-    return f"The runtime '{runtime}' was not found on machine '{machine.name}', " \
-           f"make sure you pull it using 'aavm -H {machine.name} runtime pull <runtime>' first."
-
-
-def validate_name(name: str) -> Union[str, bool]:
+def validate_name(name: str):
     machine_dir = os.path.join(aavmconfig.path, "machines", name)
     if os.path.exists(machine_dir):
-        return f"Another machine with the name '{name}' already exists. Choose another name."
-    return True
+        raise AAVMException(f"Another machine with the name '{name}' already exists. "
+                            f"Choose another name.")

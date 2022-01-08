@@ -1,7 +1,7 @@
 from docker import DockerClient
 
 from aavm.utils.progress_bar import ProgressBar
-from cpk.types import Machine
+from cpk.types import Machine, DockerImageName
 
 
 # noinspection DuplicatedCode
@@ -34,7 +34,7 @@ def merge_container_configs(*args) -> dict:
     out = {}
     for arg in args:
         assert isinstance(arg, dict)
-        for k, v in arg:
+        for k, v in arg.items():
             if k not in out:
                 out[k] = v
             else:
@@ -48,3 +48,7 @@ def merge_container_configs(*args) -> dict:
                 else:
                     out[k] = arg[k]
     return out
+
+
+def sanitize_image_name(image: str) -> str:
+    return DockerImageName.from_image_name(image).compile(allow_defaults=True)

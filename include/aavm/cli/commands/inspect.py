@@ -9,7 +9,7 @@ from .. import AbstractCLICommand
 from ..logger import aavmlogger
 from ... import aavmconfig
 from ...types import Arguments
-from ...utils.tables import table_machine
+from ...utils.tables import table_machine, table_configuration
 
 
 class CLIInspectCommand(AbstractCLICommand):
@@ -40,11 +40,19 @@ class CLIInspectCommand(AbstractCLICommand):
         # make a table of info
         data = table_machine(machine)
         data.append(["Configuration", os.path.join(machine.path, "configuration.json")])
-        table = Table(data)
-        table.inner_heading_row_border = False
-        table.justify_columns[0] = 'right'
-        table.title = " Machine "
+        machine_table = Table(data)
+        machine_table.inner_heading_row_border = False
+        machine_table.justify_columns[0] = 'right'
+        machine_table.title = " Machine "
         print()
-        print(table.table)
+        print(machine_table.table)
+        # show configuration info
+        data = table_configuration(machine.configuration)
+        config_table = Table(data)
+        config_table.inner_heading_row_border = False
+        config_table.justify_columns[0] = 'right'
+        config_table.title = " Configuration "
+        print()
+        print(config_table.table)
         # ---
         return True
