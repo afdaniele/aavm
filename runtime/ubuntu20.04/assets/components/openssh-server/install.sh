@@ -3,7 +3,7 @@
 set -eux
 
 # constants
-OPENSSH_SERVER_VERSION=1:8.2p1-4ubuntu0.3
+OPENSSH_SERVER_VERSION=1:8.2p*
 
 # update apt lists
 apt update
