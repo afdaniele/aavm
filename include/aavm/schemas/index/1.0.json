@@ -20,33 +20,46 @@
                 "description": "Runtime's maintainer in the format 'First Last <Email>'",
                 "minLength": 1
             },
-            "name": {
-                "type": "string",
-                "description": "Name of the Docker image implementing the runtime",
-                "minLength": 1
-            },
-            "tag": {
-                "type": "string",
-                "description": "Tag of the Docker image implementing the runtime",
-                "minLength": 1
-            },
-            "organization": {
-                "type": "string",
-                "description": "Organization or User releasing the runtime",
-                "minLength": 1
-            },
-            "registry": {
-                "type": "string",
-                "description": "Docker registry to get the runtime image from",
-                "minLength": 1
-            },
-            "arch": {
-                "type": "array",
-                "description": "List of architectures the runtime is available for",
-                "items": {
-                    "type": "string",
-                    "enum": ["amd64", "arm32v7", "arm64v8"]
-                }
+            "image": {
+                "type": "object",
+                "description": "Docker image implementing the runtime",
+                "properties": {
+                    "registry": {
+                        "type": "string",
+                        "description": "Docker registry to get the runtime image from",
+                        "minLength": 1
+                    },
+                    "user": {
+                        "type": "string",
+                        "description": "Organization or User releasing the runtime",
+                        "minLength": 1
+                    },
+                    "repository": {
+                        "type": "string",
+                        "description": "Name of the Docker repository implementing the runtime",
+                        "minLength": 1
+                    },
+                    "tag": {
+                        "type": "string",
+                        "description": "Tag of the Docker image implementing the runtime",
+                        "minLength": 1
+                    },
+                    "arch": {
+                        "type": "array",
+                        "description": "List of architectures the runtime is available for",
+                        "items": {
+                            "type": "string",
+                            "enum": ["amd64", "arm32v7", "arm64v8"]
+                        },
+                        "minItems": 1
+                    }
+                },
+                "required": [
+                    "user",
+                    "repository",
+                    "tag",
+                    "arch"
+                ]
             },
             "configuration": {
                 "type": "object",
@@ -62,10 +75,7 @@
             "schema",
             "description",
             "maintainer",
-            "name",
-            "tag",
-            "organization",
-            "arch",
+            "image",
             "configuration"
         ],
         "additionalProperties": false

@@ -3,13 +3,15 @@
         "schema": "1.0",
         "description": "AAVM Runtime based on Ubuntu 20.04",
         "maintainer": "Andrea F. Daniele <afdaniele@ttic.edu>",
-        "name": "aavm-ubuntu",
-        "tag": "20.04",
-        "organization": "afdaniele",
-        "arch": [
-            "amd64",
-            "arm64v8"
-        ],
+        "image": {
+            "repository": "aavm-ubuntu",
+            "tag": "20.04",
+            "user": "afdaniele",
+            "arch": [
+                "amd64",
+                "arm64v8"
+            ]
+        },
         "configuration": {
             "tmpfs": {
                 "/tmp": "",
