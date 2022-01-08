@@ -46,6 +46,9 @@ COPY ./*.cpk ./*.sh ${PROJECT_PATH}/
 # <== Do not change the code above this line
 # <==================================================
 
+# copy components
+COPY assets/components "${AAVM_DIR}/components/available"
+
 # install components
 # - Docker
 RUN aavm-component-install docker

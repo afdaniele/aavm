@@ -9,8 +9,8 @@ ARG MAINTAINER
 # ==> Do not change the code below this line
 ARG BASE_REGISTRY=docker.io
 ARG BASE_ORGANIZATION=afdaniele
-ARG BASE_REPOSITORY=aavm-ubuntu
-ARG BASE_TAG=20.04
+ARG BASE_REPOSITORY=aavm-dind
+ARG BASE_TAG=20.10.7
 
 # define base image
 FROM ${BASE_REGISTRY}/${BASE_ORGANIZATION}/${BASE_REPOSITORY}:${BASE_TAG}-${ARCH} as BASE
@@ -50,9 +50,9 @@ COPY ./*.cpk ./*.sh ${PROJECT_PATH}/
 COPY assets/components "${AAVM_DIR}/components/available"
 
 # install components
-# - OpenSSH Server
-RUN aavm-component-install openssh-server
-LABEL aavm.environment.components.openssh-server="1"
+# - Docker Rootless
+RUN aavm-component-install docker-rootless
+LABEL aavm.environment.components.docker-rootless="1"
 
 # store aavm metadata
 LABEL \
