@@ -10,6 +10,11 @@
                 "description": "Schema version this runtime object is using",
                 "pattern": "[0-9]+\\.[0-9]+(\\.[0-9]+)?"
             },
+            "version": {
+                "type": "string",
+                "description": "Runtime version",
+                "pattern": "[0-9]+\\.[0-9]+(\\.[0-9]+)?"
+            },
             "description": {
                 "type": "string",
                 "description": "Description of the runtime",
@@ -73,6 +78,7 @@
         },
         "required": [
             "schema",
+            "version",
             "description",
             "maintainer",
             "image",

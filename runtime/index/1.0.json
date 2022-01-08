@@ -1,6 +1,7 @@
 [
     {
         "schema": "1.0",
+        "version": "0.1.0",
         "description": "AAVM Runtime based on Ubuntu 20.04",
         "maintainer": "Andrea F. Daniele <afdaniele@ttic.edu>",
         "image": {
