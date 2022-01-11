@@ -36,15 +36,15 @@ fields = {
         "pattern_human": "a valid Docker image name",
         "validator": EmptyValidator
     },
-    "persistency": {
-        "title": "Persistency",
-        "suggestion": "y/n",
-        "description": "[Requires root privileges] Make changes to the virtual machine's "
-                       "root file system persistent across runs",
-        "pattern": r"^[y|n|Y|N]$",
-        "pattern_human": "either 'y' or 'n'",
-        "validator": EmptyValidator
-    },
+    # "persistency": {
+    #     "title": "Persistency",
+    #     "suggestion": "y/n",
+    #     "description": "[Requires root privileges] Make changes to the virtual machine's "
+    #                    "root file system persistent across runs",
+    #     "pattern": r"^[y|n|Y|N]$",
+    #     "pattern_human": "either 'y' or 'n'",
+    #     "validator": EmptyValidator
+    # },
 }
 
 
