@@ -19,7 +19,7 @@ from aavm.cli.commands.restart import CLIRestartCommand
 # from aavm.cli.commands.clean import CLICleanCommand
 # from aavm.cli.commands.push import CLIPushCommand
 # from aavm.cli.commands.decorate import CLIDecorateCommand
-# from aavm.cli.commands.machine import CLIMachineCommand
+from aavm.cli.commands.reset import CLIResetCommand
 from aavm.cli.commands.runtime import CLIRuntimeCommand
 
 from cpk.utils.machine import get_machine
@@ -34,6 +34,7 @@ _supported_commands = {
     'restart': CLIRestartCommand,
     # 'decorate': CLIDecorateCommand,
     # 'machine': CLIMachineCommand,
+    'reset': CLIResetCommand,
     'runtime': CLIRuntimeCommand,
 }
 

@@ -9,7 +9,7 @@ from ..logger import aavmlogger
 from ... import aavmconfig
 from ...constants import MACHINE_SCHEMA_DEFAULT_VERSION, MACHINE_DEFAULT_VERSION
 from ...exceptions import AAVMException
-from ...types import Arguments, AAVMMachine, AAVMRuntime
+from ...types import Arguments, AAVMMachine, AAVMRuntime, MachineSettings, MachineLinks
 
 EmptyValidator = lambda *_: _
 
@@ -34,6 +34,15 @@ fields = {
         "description": "The runtime to use as base for your machine",
         "pattern": r"^.+$",
         "pattern_human": "a valid Docker image name",
+        "validator": EmptyValidator
+    },
+    "persistency": {
+        "title": "Persistency",
+        "suggestion": "y/n",
+        "description": "[Requires root privileges] Make changes to the virtual machine's "
+                       "root file system persistent across runs",
+        "pattern": r"^[y|n|Y|N]$",
+        "pattern_human": "either 'y' or 'n'",
         "validator": EmptyValidator
     },
 }
@@ -64,11 +73,13 @@ class CLICreateCommand(AbstractCLICommand):
             pattern = field["pattern"]
             description = field["description"]
             pattern_human = field["pattern_human"]
+            suggestion = field.get("suggestion", None)
+            suggestion = f" [{suggestion}]" if suggestion else ""
             validator = field["validator"] or (lambda _: True)
             # ---
             done = False
             while not done:
-                res = input(f"{space}\n{space}\t{title} ({description})\n{space}\t> ")
+                res = input(f"{space}\n{space}\t{title}{suggestion}: ({description})\n{space}\t> ")
                 # break when 'q' is given
                 if res.lower().strip() == "q":
                     aavmlogger.info('Quitting...')
@@ -95,11 +106,15 @@ class CLICreateCommand(AbstractCLICommand):
             runtime=AAVMRuntime.from_image_name(machine_info["runtime"]),
             description=machine_info["description"],
             configuration={},
-            machine=machine
+            settings=MachineSettings(
+                persistency=bool(machine_info["persistency"] in ["y", "Y"])
+            ),
+            links=MachineLinks(
+                machine=machine,
+                container=None
+            )
         )
         machine.to_disk()
-        # make root directory
-        machine.make_root()
         # ---
         aavmlogger.info(f"Machine '{machine_info['name']}' created successfully.")
         return True

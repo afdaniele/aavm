@@ -1,20 +1,15 @@
 import argparse
-import json
 from typing import Optional
 
 from cpk.types import Machine
-
 from .. import AbstractCLICommand
 from ..logger import aavmlogger
 from ... import aavmconfig
 from ...types import Arguments
-from ...utils.docker import merge_container_configs
-from ...utils.misc import aavm_label
 from ...utils.runtime import get_known_runtimes
 
 
 class CLIStartCommand(AbstractCLICommand):
-
     KEY = 'start'
 
     @staticmethod
@@ -45,52 +40,43 @@ class CLIStartCommand(AbstractCLICommand):
             return False
         # get the machine
         machine = aavmconfig.machines[parsed.machine]
-        machine.machine = cpk_machine
+        if (machine.links.machine is not None) and (machine.links.machine != cpk_machine):
+            aavmlogger.error(f"Machine '{machine.name}' is already associated with the CPK "
+                             f"machine '{cpk_machine.name}'. You can't run it on a different one.")
+            return False
+        # link this machine to the current cpk machine
+        machine.links.machine = cpk_machine
         # try to get an existing container for this machine
         container = machine.container
-        if container is not None:
-            if container.status != "running":
-                aavmlogger.info("Starting machine...")
-                container.start()
-                aavmlogger.info("Machine started, you should see it running with the container "
-                                f"name '{container.name}'.")
-            else:
-                aavmlogger.info(f"The machine '{machine.name}' appears to be running already."
-                                f" Nothing to do.")
-            return True
-        # make sure the runtime is downloaded
-        aavmlogger.debug("Fetching list of available runtimes from the machine in use...")
-        machine_runtimes = get_known_runtimes(machine=cpk_machine)
-        aavmlogger.debug(f"{len(machine_runtimes)} runtimes found on the machine.")
-        machine_matches = [r for r in machine_runtimes if r.image == machine.runtime.image]
-        if len(machine_matches) <= 0:
-            aavmlogger.error(f"The machine '{machine.name}' uses the runtime "
-                             f"'{machine.runtime.image}' which is currently not installed. Use "
-                             f"the following command to install it,\n\n"
-                             f"\t$ aavm runtime pull {machine.runtime.image}\n")
-            return False
-        # collect configurations from runtime and machine definition
-        runtime_cfg = machine.runtime.configuration
-        machine_cfg = machine.configuration
-        container_cfg = merge_container_configs(runtime_cfg, machine_cfg)
-        # add image from the runtime to the container configutation
-        container_cfg["image"] = machine.runtime.image.compile()
-        # define container's name
-        container_cfg["name"] = machine.container_name
-        # add machine.name label
-        container_cfg["labels"] = {
-            aavm_label("machine.name"): machine.name
-        }
-        # make a new container for this machine
-        docker = machine.machine.get_client()
-        aavmlogger.debug(f"Creating container with configuration:\n\n"
-                         f"{json.dumps(container_cfg, indent=4)}\n")
-        container = docker.containers.create(**container_cfg)
-        # start container
-        aavmlogger.info("Starting machine...")
-        container.start()
+        if container is None:
+            # make sure the runtime is downloaded
+            aavmlogger.debug("Fetching list of available runtimes from the machine in use...")
+            machine_runtimes = get_known_runtimes(machine=cpk_machine)
+            aavmlogger.debug(f"{len(machine_runtimes)} runtimes found on the machine.")
+            machine_matches = [r for r in machine_runtimes if r.image == machine.runtime.image]
+            if len(machine_matches) <= 0:
+                aavmlogger.error(f"The machine '{machine.name}' uses the runtime "
+                                 f"'{machine.runtime.image}' which is currently not installed. "
+                                 f"Use the following command to install it,\n\n"
+                                 f"\t$ aavm runtime pull {machine.runtime.image}\n")
+                return False
+            # make container
+            container = machine.make_container()
+            machine.links.container = container.id
+
         # TODO: implement '--attach'
-        aavmlogger.info("Machine started, you should see it running with the container "
-                        f"name '{container.name}'.")
+
+        # store machine back to disk to update association with container and CPK machine
+        machine.to_disk()
+
+        # container exists, start it
+        if container.status != "running":
+            aavmlogger.info("Starting machine...")
+            container.start()
+            aavmlogger.info("Machine started, you should see it running with the container "
+                            f"name '{container.name}'.")
+        else:
+            aavmlogger.info(f"The machine '{machine.name}' appears to be running already."
+                            f" Nothing to do.")
         # ---
         return True

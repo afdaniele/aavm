@@ -1,4 +1,3 @@
-import base64
 import dataclasses
 import json
 import os
@@ -8,23 +7,24 @@ from types import SimpleNamespace
 from typing import List, Dict, Optional, Any, Union, ClassVar
 
 import jsonschema
+from docker.errors import NotFound
 from docker.models.containers import Container
 
-from aavm.utils.docker import sanitize_image_name
-from cpk.utils.machine import get_machine
-
-from cpk.machine import FromEnvMachine
-
-from cpk import cpkconfig
-
+from aavm.cli import aavmlogger
 from aavm.exceptions import AAVMException
 from aavm.schemas import get_machine_schema, get_runtime_schema
+from aavm.utils.docker import sanitize_image_name, merge_container_configs, RUNNING_STATUSES
+from aavm.utils.misc import aavm_label
+from cpk import cpkconfig
+from cpk.machine import FromEnvMachine
 from cpk.types import Machine as CPKMachine, DockerImageName, DockerImageRegistry
+from cpk.utils.machine import get_machine
 
 Arguments = List[str]
 Environment = Dict[str, str]
 ContainerConfiguration = Dict[str, Any]
 RuntimeMetadata = Dict[str, Any]
+MachineSettings = Dict[str, Any]
 
 
 class ISerializable(ABC):
@@ -177,8 +177,50 @@ class AAVMRuntime(ISerializable):
             json.dump(self.configuration, fout, indent=4)
 
 
-class AAVMMachineRoot(str, ISerializable):
-    pass
+@dataclasses.dataclass
+class MachineSettings(ISerializable):
+    persistency: bool = False
+
+    def serialize(self) -> dict:
+        return dataclasses.asdict(self)
+
+    @classmethod
+    def deserialize(cls, data: dict) -> 'MachineSettings':
+        return MachineSettings(**data)
+
+
+@dataclasses.dataclass
+class MachineLinks(ISerializable):
+    machine: CPKMachine
+    container: Optional[str]
+
+    def serialize(self) -> dict:
+        return {
+            "machine": self.machine.name if not isinstance(self.machine, FromEnvMachine)
+            else None,
+            "container": self.container
+        }
+
+    @classmethod
+    def deserialize(cls, machine: str, data: dict) -> 'MachineLinks':
+        # reconstruct machine
+        cpk_machine_name = data["machine"]
+        cpk_machine = None
+        # we have a name for the CPK machine
+        if cpk_machine_name:
+            cpk_machine = cpkconfig.machines.get(cpk_machine_name, None)
+            if cpk_machine is None:
+                raise AAVMException(f"AAVM Machine with name '{machine}' is set to run on the CPK "
+                                    f"machine '{cpk_machine_name}' but such machine was not "
+                                    f"found.")
+        # get a default machine
+        if cpk_machine is None:
+            # noinspection PyTypeChecker
+            cpk_machine = get_machine(SimpleNamespace(machine=None), cpkconfig.machines)
+        # ---
+        data["machine"] = cpk_machine
+        # ---
+        return MachineLinks(**data)
 
 
 @dataclasses.dataclass
@@ -190,23 +232,37 @@ class AAVMMachine(ISerializable):
     runtime: AAVMRuntime
     description: str
     configuration: ContainerConfiguration
-    machine: CPKMachine
+    settings: MachineSettings
+    links: MachineLinks
 
     _container: Optional['AAVMContainer'] = None
 
-    @property
-    def root(self) -> AAVMMachineRoot:
-        return AAVMMachineRoot(os.path.join(self.path, "root"))
+    # @property
+    # def root(self) -> str:
+    #     return os.path.realpath(os.path.join(self.path, "root"))
 
     @property
     def container_name(self) -> str:
         return f"aavm-machine-{self.name}"
 
     @property
+    def machine(self) -> CPKMachine:
+        return self.links.machine
+
+    @property
     def container(self) -> Optional['AAVMContainer']:
-        from aavm.utils.machine import get_container
-        if self._container is None:
-            self._container = get_container(self)
+        if self._container is None and self.links.container is not None:
+            client = self.machine.get_client()
+            container = None
+            try:
+                container = client.containers.get(self.links.container)
+            except NotFound:
+                # annotate that the container is gone
+                self.links.container = None
+                self.to_disk()
+            # return container or nothing
+            self._container = container
+        # ---
         return self._container
 
     @property
@@ -223,8 +279,139 @@ class AAVMMachine(ISerializable):
             return "down"
         return container.status
 
-    def make_root(self, exist_ok: bool = False):
-        os.makedirs(self.root, exist_ok=exist_ok)
+    def reset(self):
+        # try to get an existing container for this machine
+        container = self.container
+        if container is not None:
+            if container.status in RUNNING_STATUSES:
+                raise AAVMException(f"Machine '{self.name}' is in status '{container.status}', "
+                                    "you can only reset a machine after you stopped it.")
+            else:
+                aavmlogger.debug(f"Removing container '{container.name}'...")
+                container.remove()
+                aavmlogger.debug(f"Container '{container.name}' removed.")
+
+        # # reset root file system
+        # if root:
+        #     client = docker.from_env()
+        #     aavmlogger.debug(f"Removing root file system stored at '{self.root}'...")
+        #     client.containers.run(
+        #         image="alpine",
+        #         remove=True,
+        #         command=["rmdir", self.root],
+        #         volumes={
+        #             self.path: {'bind': self.path, 'mode': 'rw'}
+        #         }
+        #     )
+        #     aavmlogger.debug(f"Root file system stored at '{self.root}' removed.")
+        #     # recreate empty root
+        #     self.make_root()
+
+    # def make_root(self, exist_ok: bool = False):
+    #     os.makedirs(self.root, exist_ok=exist_ok)
+
+    def make_container(self) -> 'AAVMContainer':
+        # collect configurations from runtime and machine definition
+        runtime_cfg = self.runtime.configuration
+        machine_cfg = self.configuration
+        container_cfg = merge_container_configs(runtime_cfg, machine_cfg)
+        # add image from the runtime to the container configutation
+        container_cfg["image"] = self.runtime.image.compile()
+        # define container's name
+        container_cfg["name"] = self.container_name
+        # add self.name label
+        container_cfg["labels"] = {
+            aavm_label("machine.name"): self.name
+        }
+        # make a new container for this machine
+        config_str = json.dumps(container_cfg, indent=4)
+        aavmlogger.debug(f"Creating container with configuration:\n\n{config_str}\n")
+        client = self.machine.get_client()
+        container = client.containers.create(**container_cfg)
+        # ---
+        return container
+
+        # # mount root fs (if needed)
+        # if self.settings.persistency:
+        #     aavmlogger.debug("Persistency is enabled, mounting root file system to machine "
+        #                      f"'{self.name}'...")
+        #     try:
+        #         self._mount_root()
+        #     except AAVMException as e:
+        #         aavmlogger.error(str(e))
+        #         container_name = container.name
+        #         aavmlogger.debug(f"Removing container '{container_name}'...")
+        #         container.remove()
+        #         aavmlogger.debug(f"Container '{container_name}' removed.")
+        #     aavmlogger.debug(f"Root file system mounted on machine '{self.name}'.")
+
+    # @property
+    # def root_is_mounted(self) -> bool:
+    #     # root is not mounted if not requested
+    #     if not self.settings.persistency:
+    #         return False
+    #     # root is not mounted if container does not exist
+    #     container = self.container
+    #     if container is None:
+    #         return False
+    #     # root can only be mounted with 'overlay' storage driver
+    #     fs_driver: str = container.attrs["Driver"]
+    #     if not fs_driver.startswith("overlay"):
+    #         return False
+    #     # ---
+    #     return True
+    #
+    # def _mount_root(self):
+    #     # nothing to do if the root disk is already mounted
+    #     if self.root_is_mounted:
+    #         return
+    #     # attempt to mount root file system
+    #     root_dir = self.root
+    #     container = self.container
+    #     # make sure we are using 'overlay' driver
+    #     fs_driver: str = container.attrs["Driver"]
+    #     if not fs_driver.startswith("overlay"):
+    #         raise AAVMException(f"Container '{container.name}' for machine '{self.name}' is "
+    #                             f"using the file system driver '{fs_driver}' which is not "
+    #                             f"supported for persistent root.")
+    #     # make sure the container is stopped
+    #     if container.status not in STOPPED_STATUSES:
+    #         raise AAVMException(f"Container '{container.name}' for machine '{self.name}' has "
+    #                             f"currently status '{container.status}'. The root can be mounted "
+    #                             f"only while the container is in one of these statuses: "
+    #                             f"{', '.join(STOPPED_STATUSES)}.")
+    #     # find location of the machine's container's overlay
+    #     container_overlay = str(Path(container.attrs["GraphDriver"]["Data"]["UpperDir"]).parent)
+    #     # perform relinking of the overlay
+    #     # refuse to do anything if the layer is not empty
+    #     root_layer_num_files = len(os.listdir(root_layer))
+    #     if root_layer_num_files > 0:
+    #         raise AAVMException(f"Container '{container.name}' for machine '{self.name}' has a "
+    #                             f"volatile non-empty root layer. This should not have happened, "
+    #                             f"you need to recreate the container to recover.")
+    #     # delete empty volatile root layer dir
+    #     container_dir = str(Path(root_layer_dir).parent)
+    #     client = self.machine.get_client()
+    #     aavmlogger.debug(f"Machine '{self.name}': Removing empty directory '{root_layer_dir}'")
+    #     client.containers.run(
+    #         image="alpine",
+    #         remove=True,
+    #         command=["rmdir", root_layer_dir],
+    #         volumes={
+    #             container_dir: {'bind': container_dir, 'mode': 'rw'}
+    #         }
+    #     )
+    #     # create symlink between the container's diff layer and the persistent root directory
+    #     aavmlogger.debug(f"Machine '{self.name}': Making symlink '{root_dir}' -> "
+    #                      f"'{root_layer_dir}'")
+    #     client.containers.run(
+    #         image="alpine",
+    #         remove=True,
+    #         command=["ln", "-s", root_dir, root_layer_dir],
+    #         volumes={
+    #             container_dir: {'bind': container_dir, 'mode': 'rw'}
+    #         }
+    #     )
 
     def serialize(self) -> dict:
         return {
@@ -232,7 +419,8 @@ class AAVMMachine(ISerializable):
             "version": self.version,
             "runtime": self.runtime.image.compile(allow_defaults=True),
             "description": self.description,
-            "machine": self.machine.name,
+            "settings": self.settings.serialize(),
+            "links": self.links.serialize()
         }
 
     @classmethod
@@ -241,14 +429,10 @@ class AAVMMachine(ISerializable):
         runtime = AAVMRuntime.from_image_name(data["runtime"])
         # get configuration
         configuration = cls.load_configuration(path) if path else {}
-        # get machine
-        cpk_machine_name = data["machine"]
-        cpk_machine = None
-        if cpk_machine_name:
-            cpk_machine = cpkconfig.machines.get(cpk_machine_name, None)
-            if cpk_machine is None:
-                raise AAVMException(f"AAVM Machine with name '{name}' is set to run on the CPK "
-                                    f"machine '{cpk_machine_name}' but such machine was not found.")
+        # get settings
+        settings = MachineSettings.deserialize(data["settings"])
+        # get links
+        links = MachineLinks.deserialize(name, data["links"])
         # reconstruct AAVM machine object
         return AAVMMachine(
             schema=data["schema"],
@@ -258,7 +442,8 @@ class AAVMMachine(ISerializable):
             path=path,
             description=data["description"],
             configuration=configuration,
-            machine=cpk_machine
+            settings=settings,
+            links=links
         )
 
     def to_disk(self):
@@ -271,9 +456,6 @@ class AAVMMachine(ISerializable):
         machine_file = os.path.join(machine_dir, "machine.json")
         # serialize machine
         data = self.serialize()
-        # store only the machine's name
-        data["machine"] = self.machine.name if not isinstance(self.machine, FromEnvMachine) \
-            else None
         # write dictionary to disk
         with open(machine_file, "wt") as fout:
             json.dump(data, fout, indent=4)
@@ -329,12 +511,6 @@ class AAVMMachine(ISerializable):
         )
         # load configuration file
         machine.configuration = cls.load_configuration(path)
-        # expand CPK Machine field
-        namespace = SimpleNamespace(machine=None)
-        if data["machine"] != "from-environment":
-            namespace.machine = data["machine"]
-        # noinspection PyTypeChecker
-        machine.machine = get_machine(namespace, cpkconfig.machines)
         # ---
         return machine
 
@@ -372,137 +548,3 @@ class AAVMConfiguration:
 
 class AAVMContainer(Container):
     pass
-
-# @dataclasses.dataclass
-# class AAVMFileMapping:
-#     source: str
-#     destination: str
-#     required: bool
-#
-#     def __copy__(self):
-#         return self.__deepcopy__({})
-#
-#     def __deepcopy__(self, memo):
-#         return AAVMFileMapping(
-#             source=self.source,
-#             destination=self.destination,
-#             required=self.required
-#         )
-#
-#     @staticmethod
-#     def from_dict(data: dict) -> 'AAVMFileMapping':
-#         return AAVMFileMapping(
-#             source=data['source'],
-#             destination=data['destination'],
-#             required=data.get('required', False)
-#         )
-
-
-# @dataclasses.dataclass
-# class AAVMMachineInfo:
-#     name: str
-#     mappings: List[AAVMFileMapping] = dataclasses.field(default_factory=list)
-
-
-# @dataclasses.dataclass
-# class DockerImageRegistry:
-#     hostname: str = "docker.io"
-#     port: int = 5000
-#
-#     def is_default(self) -> bool:
-#         defaults = DockerImageRegistry()
-#         # add - registry
-#         if self.hostname != defaults.hostname or self.port != defaults.port:
-#             return False
-#         return True
-#
-#     def compile(self, allow_defaults: bool = False) -> Optional[str]:
-#         defaults = DockerImageRegistry()
-#         name = None if not allow_defaults else f"{defaults.hostname}"
-#         # add - registry
-#         if self.hostname != defaults.hostname:
-#             if self.port != defaults.port:
-#                 name += f"{self.hostname}:{self.port}"
-#             else:
-#                 name += f"{self.hostname}"
-#         # ---
-#         return name
-#
-#     def __str__(self) -> str:
-#         return self.compile(allow_defaults=True)
-
-
-# @dataclasses.dataclass
-# class DockerImageName:
-#     """
-#     The official Docker image naming convention is:
-#
-#         [REGISTRY[:PORT] /] USER / REPO [:TAG]
-#
-#     """
-#     repository: str
-#     user: str = "library"
-#     registry: DockerImageRegistry = dataclasses.field(default_factory=DockerImageRegistry)
-#     tag: str = "latest"
-#     arch: Optional[str] = None
-#
-#     def compile(self) -> str:
-#         name = ""
-#         defaults = DockerImageName("_")
-#         # add - registry
-#         registry = self.registry.compile()
-#         if registry:
-#             name += f"{registry}/"
-#         # add - user
-#         if self.user != defaults.user:
-#             name += f"{self.user}/"
-#         # add - repository
-#         name += self.repository
-#         # add - tag
-#         if self.tag != defaults.tag or self.arch:
-#             name += f":{self.tag}"
-#         # add - arch
-#         if self.arch:
-#             name += f"-{self.arch}"
-#         # ---
-#         return name
-#
-#     @staticmethod
-#     def from_image_name(name: str) -> 'DockerImageName':
-#         input_parts = name.split('/')
-#         image = DockerImageName(
-#             repository="X"
-#         )
-#         # ---
-#         registry = None
-#         # ---
-#         if len(input_parts) == 3:
-#             registry, image.user, image_tag = input_parts
-#         elif len(input_parts) == 2:
-#             image.user, image_tag = input_parts
-#         elif len(input_parts) == 1:
-#             image_tag = input_parts[0]
-#         else:
-#             raise ValueError("Invalid Docker image name")
-#         image.repository, tag, *_ = image_tag.split(':') + ["latest"]
-#         for arch in set(CANONICAL_ARCH.values()):
-#             if tag.endswith(f"-{arch}"):
-#                 tag = tag[:-(len(arch) + 1)]
-#                 image.arch = arch
-#                 break
-#         image.tag = tag
-#         if registry:
-#             image.registry.hostname, image.registry.port, *_ = registry.split(':') + [5000]
-#         # ---
-#         return image
-#
-#     def __str__(self) -> str:
-#         return f"""\
-# Registry:\t{str(self.registry)}
-# User:\t\t{self.user}
-# Repository:\t{self.repository}
-# Tag:\t\t{self.tag}
-# Arch:\t\t{self.arch}
-#         """
-
-

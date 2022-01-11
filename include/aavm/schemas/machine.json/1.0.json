@@ -25,10 +25,39 @@
             "description": "Object that will be unpacked as kwargs in docker.containers.create()",
             "additionalProperties": true
         },
-        "machine": {
-            "type": [
-                "string",
-                "null"
+        "settings": {
+            "type": "object",
+            "description": "Machine's settings",
+            "properties": {
+                "persistency": {
+                    "type": "boolean",
+                    "description": "Make changes to the virtual machine's root file system persistent across runs"
+                }
+            },
+            "additionalProperties": false
+        },
+        "links": {
+            "type": "object",
+            "description": "Links to a Docker environment",
+            "properties": {
+                "machine": {
+                    "type": [
+                        "null",
+                        "string"
+                    ],
+                    "description": "Name of the CPK machine this machine is associated with"
+                },
+                "container": {
+                    "type": [
+                        "null",
+                        "string"
+                    ],
+                    "description": "ID of the container running this machine"
+                }
+            },
+            "required": [
+                "machine",
+                "container"
             ]
         }
     },
@@ -37,7 +66,8 @@
         "version",
         "description",
         "runtime",
-        "machine"
+        "settings",
+        "links"
     ],
     "additionalProperties": false
 }

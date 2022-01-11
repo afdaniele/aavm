@@ -3,6 +3,19 @@ from docker import DockerClient
 from aavm.utils.progress_bar import ProgressBar
 from cpk.types import Machine, DockerImageName
 
+ALL_STATUSES = [
+    "created", "restarting", "running", "removing", "paused", "exited", "dead"
+]
+STOPPED_STATUSES = [
+    "created", "exited", "dead"
+]
+UNSTABLE_STATUSES = [
+    "restarting", "removing"
+]
+RUNNING_STATUSES = [
+    "running", "paused"
+]
+
 
 # noinspection DuplicatedCode
 def pull_image(machine: Machine, image: str, progress: bool = True):
