@@ -1,4 +1,4 @@
-EXTRA_ARGS=""
+EXTRA_ARGS=
 
 
 build-all:
@@ -8,11 +8,11 @@ build-all:
 	cpk build -C ./sshd8.2 -a amd64 ${EXTRA_ARGS}
 	cpk build -C ./sshd8.2 -a arm64v8 ${EXTRA_ARGS}
 
-	cpk build -C ./dind20.10 -a amd64 ${EXTRA_ARGS}
-	cpk build -C ./dind20.10 -a arm64v8 ${EXTRA_ARGS}
+	cpk build -C ./docker20.10.7 -a amd64 ${EXTRA_ARGS}
+	cpk build -C ./docker20.10.7 -a arm64v8 ${EXTRA_ARGS}
 
-	cpk build -C ./dind-rootless20.10 -a amd64 ${EXTRA_ARGS}
-	cpk build -C ./dind-rootless20.10 -a arm64v8 ${EXTRA_ARGS}
+	cpk build -C ./rootless-docker20.10.7 -a amd64 ${EXTRA_ARGS}
+	cpk build -C ./rootless-docker20.10.7 -a arm64v8 ${EXTRA_ARGS}
 
 
 release-all:

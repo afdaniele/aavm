@@ -34,7 +34,7 @@
         "description": "Ubuntu 20.04 - Docker Engine v20.10.7 + Docker Compose v1.25.0",
         "maintainer": "Andrea F. Daniele <afdaniele@ttic.edu>",
         "image": {
-            "repository": "aavm-dind",
+            "repository": "aavm-docker",
             "tag": "20.10.7",
             "user": "afdaniele",
             "arch": [
@@ -63,7 +63,7 @@
         "description": "Ubuntu 20.04 - Rootless Docker Engine v20.10.7 + Docker Compose v1.25.0",
         "maintainer": "Andrea F. Daniele <afdaniele@ttic.edu>",
         "image": {
-            "repository": "aavm-dind-rootless",
+            "repository": "aavm-rootless-docker",
             "tag": "20.10.7",
             "user": "afdaniele",
             "arch": [

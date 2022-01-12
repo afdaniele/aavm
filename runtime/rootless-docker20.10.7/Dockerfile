@@ -9,7 +9,7 @@ ARG MAINTAINER
 # ==> Do not change the code below this line
 ARG BASE_REGISTRY=docker.io
 ARG BASE_ORGANIZATION=afdaniele
-ARG BASE_REPOSITORY=aavm-dind
+ARG BASE_REPOSITORY=aavm-docker
 ARG BASE_TAG=20.10.7
 
 # define base image
