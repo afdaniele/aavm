@@ -13,14 +13,14 @@ fi
 
 # get component
 COMPONENT=$1
+shift 1
 
 # install component
 INSTALL_SH="${COMPONENTS_DIR}/available/${COMPONENT}/install.sh"
 chmod +x "${INSTALL_SH}"
-${INSTALL_SH}
+${INSTALL_SH} "$@"
 
 # setup component
-shift 1
 SETUP_SH="${COMPONENTS_DIR}/available/${COMPONENT}/setup.sh"
 chmod +x "${SETUP_SH}"
 ${SETUP_SH} "$@"
@@ -28,7 +28,7 @@ ${SETUP_SH} "$@"
 # setup component
 TEST_SH="${COMPONENTS_DIR}/available/${COMPONENT}/test.sh"
 chmod +x "${TEST_SH}"
-${TEST_SH}
+${TEST_SH} "$@"
 
 # mark as installed
 ln -s "${COMPONENTS_DIR}/available/${COMPONENT}" "${COMPONENTS_DIR}/installed/${COMPONENT}"
