@@ -5,8 +5,8 @@
         "description": "AAVM Runtime based on Ubuntu 20.04",
         "maintainer": "Andrea F. Daniele <afdaniele@ttic.edu>",
         "image": {
-            "repository": "aavm-ubuntu",
-            "tag": "20.04",
+            "repository": "aavm",
+            "tag": "ubuntu-20.04",
             "user": "afdaniele",
             "arch": [
                 "amd64",

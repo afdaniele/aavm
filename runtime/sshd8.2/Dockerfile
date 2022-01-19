@@ -9,8 +9,8 @@ ARG MAINTAINER
 # ==> Do not change the code below this line
 ARG BASE_REGISTRY=docker.io
 ARG BASE_ORGANIZATION=afdaniele
-ARG BASE_REPOSITORY=aavm-ubuntu
-ARG BASE_TAG=20.04
+ARG BASE_REPOSITORY=aavm
+ARG BASE_TAG=ubuntu-20.04
 
 # define base image
 FROM ${BASE_REGISTRY}/${BASE_ORGANIZATION}/${BASE_REPOSITORY}:${BASE_TAG}-${ARCH} as BASE
