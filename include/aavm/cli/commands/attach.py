@@ -26,6 +26,8 @@ TRIGGERS = {CPKFileMappingTrigger.DEFAULT, CPKFileMappingTrigger.RUN_MOUNT}
 RSYNC_DESTINATION_PATH = "/tmp/"
 
 
+# TODO: this seems to be a copy-paste of `cpk run`
+
 class CLIAttachCommand(AbstractCLICommand):
 
     KEY = 'attach'
