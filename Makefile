@@ -1,6 +1,6 @@
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 PART=patch
-PROJECT_NAME=cpk
+PROJECT_NAME=aavm
 
 all:
 

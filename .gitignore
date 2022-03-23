@@ -3,4 +3,4 @@ dist
 MANIFEST
 docs/build/
 /build/
-/cpk.egg-info/
+/aavm.egg-info/
