@@ -58,6 +58,10 @@ LABEL aavm.environment.components.docker="1"
 RUN aavm-component-install docker-compose
 LABEL aavm.environment.components.docker-compose="1"
 
+# - Docker Buildx
+RUN aavm-component-install docker-buildx
+LABEL aavm.environment.components.docker-buildx="1"
+
 # store aavm metadata
 LABEL \
     aavm.runtime="1" \
