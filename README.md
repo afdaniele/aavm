@@ -1,6 +1,7 @@
 # aavm
 
-AAVM - Almost A Virtual Machine - Docker Containers who want to be Virtual Machines
+**AAVM** - **A**lmost **A** **V**irtual **M**achine \
+Docker Containers that want to be Virtual Machines.
 
 
 ## Developer
